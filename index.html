@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>POS Simulador F&B</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root {
+  --pink: #e8174a;
+  --pink-light: #fde8ee;
+  --pink-mid: #f5a0b8;
+  --gray: #6b7280;
+  --gray-light: #f3f4f6;
+  --border: #e5e7eb;
+  --text: #111827;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+body { font-family: var(--font); background: #fff; color: var(--text); min-height: 100vh; max-width: 480px; margin: 0 auto; position: relative; }
+
+.status-bar { background: var(--pink); padding: 6px 16px 0; display: flex; justify-content: space-between; align-items: center; }
+.status-bar .time { color: #fff; font-size: 13px; font-weight: 600; }
+.status-bar .icons { color: #fff; font-size: 11px; }
+
+.header { background: var(--pink); padding: 10px 16px 16px; }
+.header-top { display: flex; align-items: center; gap: 10px; }
+.header-logo { width: 36px; height: 36px; background: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.header-title { color: #fff; font-size: 17px; font-weight: 700; flex: 1; text-align: center; }
+.header-badge { background: #fff3; color: #fff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px; letter-spacing: 1px; }
+
+.train-banner { background: var(--pink-light); border-bottom: 1px solid #fecdd8; padding: 7px 16px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9f1239; font-weight: 600; }
+
+.categories-bar { background: #fff; padding: 12px 16px 0; border-bottom: 1px solid var(--border); }
+.categories-label { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+.categories-scroll { display: flex; gap: 20px; overflow-x: auto; scrollbar-width: none; }
+.categories-scroll::-webkit-scrollbar { display: none; }
+.cat-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding-bottom: 10px; border-bottom: 3px solid transparent; flex-shrink: 0; transition: all .2s; }
+.cat-item.active { border-color: var(--pink); }
+.cat-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--gray-light); display: flex; align-items: center; justify-content: center; font-size: 24px; transition: background .2s; }
+.cat-item.active .cat-icon { background: var(--pink-light); }
+.cat-name { font-size: 11px; font-weight: 600; color: var(--gray); }
+.cat-item.active .cat-name { color: var(--pink); }
+
+.products-section { padding: 14px 14px 110px; }
+.products-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.prod-card { border-radius: 14px; background: #fff; cursor: pointer; position: relative; }
+.prod-img-emoji { width: 100%; aspect-ratio: 1; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 66px; }
+.prod-info { padding: 8px 2px 6px; }
+.prod-name { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.3; margin-bottom: 4px; }
+.prod-price { font-size: 15px; font-weight: 700; color: var(--text); }
+
+.qty-controls { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.qty-btn-sm { width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: transform .1s; flex-shrink: 0; }
+.qty-btn-sm.minus { background: #fff; border: 2px solid var(--border); color: var(--pink); }
+.qty-btn-sm.plus { background: var(--pink); color: #fff; }
+.qty-btn-sm:active { transform: scale(0.88); }
+.qty-num-sm { font-size: 16px; font-weight: 700; min-width: 22px; text-align: center; flex: 1; }
+.add-first-btn { margin-top: 8px; }
+.add-first-btn button { background: none; border: none; color: var(--pink); font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px 0; }
+
+.bottom-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: #fff; border-top: 1px solid var(--border); padding: 10px 16px 16px; display: flex; align-items: center; gap: 12px; z-index: 200; box-shadow: 0 -4px 20px #0000000d; }
+.bottom-bar .item-count { font-size: 20px; font-weight: 700; color: var(--text); min-width: 28px; text-align: center; }
+.bottom-bar .vender-btn { flex: 1; background: var(--pink); color: #fff; border: none; border-radius: 50px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer; }
+.bottom-bar .vender-btn:active { opacity: 0.85; }
+.bottom-bar .total-pill { background: #c41039; color: #fff; border-radius: 50px; padding: 10px 16px; font-size: 15px; font-weight: 700; white-space: nowrap; }
+
+/* ── COBRO SCREEN ── */
+.cobro-screen { display: none; position: fixed; inset: 0; background: #fff; z-index: 300; flex-direction: column; max-width: 480px; margin: 0 auto; left: 50%; transform: translateX(-50%); }
+.cobro-screen.active { display: flex; }
+.cobro-header { background: var(--pink); padding: 14px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.back-btn { background: #fff3; border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.cobro-header h2 { color: #fff; font-size: 18px; font-weight: 700; }
+.cobro-body { flex: 1; overflow-y: auto; padding: 16px; padding-bottom: 90px; }
+
+.order-summary { background: var(--gray-light); border-radius: 16px; padding: 16px; margin-bottom: 20px; }
+.order-title { font-size: 12px; font-weight: 700; color: var(--gray); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; }
+.order-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; }
+.oi-left { display: flex; align-items: center; gap: 8px; }
+.oi-emoji { font-size: 20px; }
+.oi-name { font-size: 13px; font-weight: 500; }
+.oi-qty { font-size: 11px; color: var(--gray); }
+.oi-price { font-size: 14px; font-weight: 700; }
+.order-divider { border: none; border-top: 1px dashed #d1d5db; margin: 10px 0; }
+.order-row { display: flex; justify-content: space-between; font-size: 14px; color: var(--gray); padding: 3px 0; }
+.order-row.grand { font-size: 20px; font-weight: 700; color: var(--text); padding-top: 8px; }
+
+.pay-section-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; color: var(--text); }
+.pay-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+.pay-card { border: 2px solid var(--border); border-radius: 16px; padding: 16px; text-align: center; cursor: pointer; transition: all .2s; }
+.pay-card.selected { border-color: var(--pink); background: var(--pink-light); }
+.pay-card .pi { font-size: 32px; display: block; margin-bottom: 6px; }
+.pay-card .pl { font-size: 14px; font-weight: 700; }
+.pay-card .ps { font-size: 11px; color: var(--gray); margin-top: 2px; }
+
+.efectivo-section { background: var(--gray-light); border-radius: 16px; padding: 16px; }
+.monto-label { font-size: 12px; font-weight: 700; color: var(--gray); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+.monto-display { background: #fff; border: 2px solid var(--border); border-radius: 12px; padding: 14px 16px; font-size: 28px; font-weight: 700; width: 100%; text-align: right; color: var(--text); margin-bottom: 12px; }
+.cambio-box { display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; border: 2px solid var(--border); }
+.cambio-box .cb-label { font-size: 14px; color: var(--gray); font-weight: 600; }
+.cambio-box .cb-val { font-size: 22px; font-weight: 700; color: #16a34a; }
+.cambio-box.neg .cb-val { color: var(--pink); }
+.numpad-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+.np-btn { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px; font-size: 22px; font-weight: 600; cursor: pointer; text-align: center; color: var(--text); transition: background .1s; }
+.np-btn:active { background: var(--pink-light); }
+.np-btn.span2 { grid-column: span 2; }
+
+.tarjeta-section { background: var(--gray-light); border-radius: 16px; padding: 30px 16px; text-align: center; }
+.tarjeta-section .ti { font-size: 56px; display: block; margin-bottom: 12px; }
+.tarjeta-section p { color: var(--gray); font-size: 14px; }
+
+.cobro-bottom { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 16px 20px; background: #fff; border-top: 1px solid var(--border); }
+.cobrar-main-btn { background: var(--pink); color: #fff; border: none; border-radius: 50px; padding: 16px; font-size: 17px; font-weight: 700; width: 100%; cursor: pointer; }
+.cobrar-main-btn:active { opacity: 0.85; }
+
+/* ── TICKET ── */
+.modal-bg { position: fixed; inset: 0; background: #0008; z-index: 500; display: flex; align-items: flex-end; justify-content: center; }
+.modal-bg.hidden { display: none; }
+.ticket-sheet { background: #fff; width: 100%; max-width: 480px; border-radius: 24px 24px 0 0; padding: 0 0 40px; max-height: 92vh; overflow-y: auto; }
+.ticket-top { background: var(--pink); border-radius: 24px 24px 0 0; padding: 24px 20px 20px; text-align: center; }
+.tick-check { font-size: 56px; display: block; margin-bottom: 8px; }
+.ticket-top h2 { color: #fff; font-size: 22px; font-weight: 700; }
+.ticket-top p { color: #fff9; font-size: 13px; margin-top: 4px; }
+.ticket-receipt { padding: 20px; font-family: 'Courier New', monospace; }
+.tr-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+.tr-div { border: none; border-top: 1px dashed #d1d5db; margin: 10px 0; }
+.tr-total { display: flex; justify-content: space-between; font-size: 20px; font-weight: 700; padding: 6px 0; }
+.tr-cambio { display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; color: #16a34a; padding: 4px 0; }
+.tr-folio { text-align: center; font-size: 11px; color: #9ca3af; margin-top: 10px; }
+.ticket-btns { padding: 0 20px; display: flex; flex-direction: column; gap: 10px; }
+.tb-nueva { background: var(--pink); color: #fff; border: none; border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer; }
+.tb-cerrar { background: var(--gray-light); color: var(--text); border: none; border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 600; cursor: pointer; }
+
+/* ── PROCESSING ── */
+.proc-bg { position: fixed; inset: 0; background: #0009; z-index: 600; display: flex; align-items: center; justify-content: center; }
+.proc-bg.hidden { display: none; }
+.proc-box { background: #fff; border-radius: 20px; padding: 40px 30px; text-align: center; width: 85%; max-width: 320px; }
+.proc-icon { font-size: 48px; display: block; margin-bottom: 12px; animation: spin 1s linear infinite; }
+@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+.proc-box h3 { font-size: 18px; font-weight: 700; color: var(--text); }
+.proc-box p { font-size: 13px; color: var(--gray); margin-top: 6px; }
+
+.toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff; padding: 10px 22px; border-radius: 30px; font-size: 14px; font-weight: 600; z-index: 700; opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap; }
+.toast.show { opacity: 1; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- STATUS BAR -->
+<div class="status-bar">
+  <span class="time" id="hora-top">--:--</span>
+  <span class="icons">📶 🔋</span>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-top">
+    <div class="header-logo">🍽️</div>
+    <div class="header-title" id="evento-titulo">24 Feb · Chivas vs Pumas</div>
+    <span class="header-badge">DEMO</span>
+  </div>
+</div>
+
+<!-- TRAINING BANNER -->
+<div class="train-banner">🎓 MODO ENTRENAMIENTO — Sin cobros reales</div>
+
+<!-- CATEGORIES -->
+<div class="categories-bar">
+  <div class="categories-label">Categorías</div>
+  <div class="categories-scroll" id="cats-scroll"></div>
+</div>
+
+<!-- PRODUCTS -->
+<div class="products-section">
+  <div class="products-grid" id="prods-grid"></div>
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottom-bar hidden" id="bottom-bar">
+  <span class="item-count" id="bot-count">0</span>
+  <button class="vender-btn" onclick="abrirCobro()">Vender</button>
+  <span class="total-pill" id="bot-total">$0</span>
+</div>
+
+<!-- ── COBRO SCREEN ── -->
+<div class="cobro-screen" id="cobro-screen">
+  <div class="cobro-header">
+    <button class="back-btn" onclick="cerrarCobro()">←</button>
+    <h2>Confirmar venta</h2>
+  </div>
+  <div class="cobro-body">
+    <div class="order-summary">
+      <div class="order-title">Tu pedido</div>
+      <div id="order-items-list"></div>
+      <div class="order-divider"></div>
+      <div id="order-totals"></div>
+    </div>
+
+    <div class="pay-section-title">Método de pago</div>
+    <div class="pay-methods">
+      <div class="pay-card selected" id="pay-ef" onclick="selPago('efectivo')">
+        <span class="pi">💵</span>
+        <div class="pl">Efectivo</div>
+        <div class="ps">Calcular cambio</div>
+      </div>
+      <div class="pay-card" id="pay-tj" onclick="selPago('tarjeta')">
+        <span class="pi">💳</span>
+        <div class="pl">Tarjeta</div>
+        <div class="ps">Débito / Crédito</div>
+      </div>
+    </div>
+
+    <div class="efectivo-section" id="efectivo-sec">
+      <div class="monto-label">Monto recibido</div>
+      <div class="monto-display" id="monto-display">$0</div>
+      <div class="cambio-box" id="cambio-box">
+        <span class="cb-label">Cambio a entregar</span>
+        <span class="cb-val" id="cambio-val">$0.00</span>
+      </div>
+      <div class="numpad-grid">
+        <button class="np-btn" onclick="np('1')">1</button>
+        <button class="np-btn" onclick="np('2')">2</button>
+        <button class="np-btn" onclick="np('3')">3</button>
+        <button class="np-btn" onclick="np('4')">4</button>
+        <button class="np-btn" onclick="np('5')">5</button>
+        <button class="np-btn" onclick="np('6')">6</button>
+        <button class="np-btn" onclick="np('7')">7</button>
+        <button class="np-btn" onclick="np('8')">8</button>
+        <button class="np-btn" onclick="np('9')">9</button>
+        <button class="np-btn span2" onclick="np('0')">0</button>
+        <button class="np-btn" onclick="np('del')">⌫</button>
+      </div>
+    </div>
+
+    <div class="tarjeta-section hidden" id="tarjeta-sec">
+      <span class="ti">💳</span>
+      <p style="font-size:16px;font-weight:700;color:#111;margin-bottom:6px">Acerque o deslice la tarjeta</p>
+      <p>El lector está listo para recibir el pago</p>
+      <p style="margin-top:10px;font-size:12px;color:#9ca3af">(Simulación · presiona Cobrar para continuar)</p>
+    </div>
+  </div>
+  <div class="cobro-bottom">
+    <button class="cobrar-main-btn" id="cobrar-btn" onclick="procesarPago()">Cobrar $0</button>
+  </div>
+</div>
+
+<!-- ── TICKET ── -->
+<div class="modal-bg hidden" id="ticket-modal">
+  <div class="ticket-sheet">
+    <div class="ticket-top">
+      <span class="tick-check">✅</span>
+      <h2>¡Venta exitosa!</h2>
+      <p id="ticket-folio-sub"></p>
+    </div>
+    <div class="ticket-receipt" id="ticket-receipt"></div>
+    <div class="ticket-btns">
+      <button class="tb-nueva" onclick="nuevaVenta()">🛒 Nueva venta</button>
+      <button class="tb-cerrar" onclick="soloTicket()">Cerrar ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROCESSING -->
+<div class="proc-bg hidden" id="proc-modal">
+  <div class="proc-box">
+    <span class="proc-icon">🔄</span>
+    <h3 id="proc-msg">Procesando pago...</h3>
+    <p>No retires la tarjeta del lector</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const PRODS = [
+  {id:1,  cat:'Bebidas',  name:'Agua Mineral',          price:35,  e:'💧', bg:'#dbeafe'},
+  {id:2,  cat:'Bebidas',  name:'Refresco',               price:45,  e:'🥤', bg:'#fce7f3'},
+  {id:3,  cat:'Bebidas',  name:'Cerveza Lager',          price:80,  e:'🍺', bg:'#fef9c3'},
+  {id:4,  cat:'Bebidas',  name:'Cerveza Artesanal',      price:120, e:'🍻', bg:'#fef3c7'},
+  {id:5,  cat:'Bebidas',  name:'Cóctel de la Casa',      price:150, e:'🍹', bg:'#fce7f3'},
+  {id:6,  cat:'Bebidas',  name:'Agua de Sabor',          price:40,  e:'🫗', bg:'#e0f2fe'},
+  {id:7,  cat:'Comida',   name:'Hot Dog',                price:65,  e:'🌭', bg:'#fef3c7'},
+  {id:8,  cat:'Comida',   name:'Nachos',                 price:90,  e:'🌮', bg:'#fef9c3'},
+  {id:9,  cat:'Comida',   name:'Pizza',                  price:80,  e:'🍕', bg:'#fee2e2'},
+  {id:10, cat:'Comida',   name:'Palomitas',              price:60,  e:'🍿', bg:'#fef9c3'},
+  {id:11, cat:'Comida',   name:'Papas Fritas',           price:75,  e:'🍟', bg:'#fef3c7'},
+  {id:12, cat:'Comida',   name:'Sandwich',               price:100, e:'🥪', bg:'#f0fdf4'},
+  {id:13, cat:'Postres',  name:'Rebanada Chocolate',     price:80,  e:'🎂', bg:'#fce7f3'},
+  {id:14, cat:'Postres',  name:'Rebanada de Flan',       price:80,  e:'🍮', bg:'#fef3c7'},
+  {id:15, cat:'Postres',  name:'Red Velvet',             price:80,  e:'🍰', bg:'#fee2e2'},
+  {id:16, cat:'Postres',  name:'Brownie',                price:60,  e:'🍫', bg:'#fef3c7'},
+  {id:17, cat:'Postres',  name:'Truffle',                price:160, e:'🍬', bg:'#f3e8ff'},
+  {id:18, cat:'Postres',  name:'Rebanada Zanahoria',     price:80,  e:'🥕', bg:'#ffedd5'},
+  {id:19, cat:'Snacks',   name:'Nuez Mix',               price:55,  e:'🥜', bg:'#fef9c3'},
+  {id:20, cat:'Snacks',   name:'Chicharrones',           price:35,  e:'🥨', bg:'#fff7ed'},
+  {id:21, cat:'Snacks',   name:'Gomitas',                price:25,  e:'🍭', bg:'#fce7f3'},
+  {id:22, cat:'Snacks',   name:'Chocolatina',            price:30,  e:'🍫', bg:'#fef3c7'},
+];
+
+const CATS = [
+  {id:'Todos', name:'Todas', e:'🍽️'},
+  {id:'Bebidas', name:'Bebidas', e:'🥤'},
+  {id:'Comida', name:'Comida', e:'🍔'},
+  {id:'Postres', name:'Postres', e:'🍰'},
+  {id:'Snacks', name:'Snacks', e:'🍿'},
+];
+
+let carrito = {};
+let catActiva = 'Todos';
+let metodoPago = 'efectivo';
+let montoStr = '';
+let folioN = 1001;
+
+function init() {
+  renderCats(); renderProds(); tick();
+  setInterval(tick, 5000);
+}
+function tick() {
+  const n = new Date();
+  document.getElementById('hora-top').textContent =
+    n.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+}
+
+function renderCats() {
+  document.getElementById('cats-scroll').innerHTML = CATS.map(c =>
+    `<div class="cat-item ${c.id===catActiva?'active':''}" onclick="selCat('${c.id}')">
+      <div class="cat-icon">${c.e}</div>
+      <span class="cat-name">${c.name}</span>
+    </div>`
+  ).join('');
+}
+function selCat(id) { catActiva=id; renderCats(); renderProds(); }
+
+function renderProds() {
+  const list = catActiva==='Todos' ? PRODS : PRODS.filter(p=>p.cat===catActiva);
+  document.getElementById('prods-grid').innerHTML = list.map(p => {
+    const qty = carrito[p.id]||0;
+    return `<div class="prod-card">
+      <div class="prod-img-emoji" style="background:${p.bg}">${p.e}</div>
+      <div class="prod-info">
+        <div class="prod-name">${p.name}</div>
+        <div class="prod-price">$${p.price}.00</div>
+        ${qty>0
+          ? `<div class="qty-controls">
+              <button class="qty-btn-sm minus" onclick="chgQty(${p.id},-1)">−</button>
+              <span class="qty-num-sm">${qty}</span>
+              <button class="qty-btn-sm plus" onclick="chgQty(${p.id},1)">+</button>
+            </div>`
+          : `<div class="add-first-btn"><button onclick="chgQty(${p.id},1)">+ Agregar</button></div>`
+        }
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function chgQty(id, d) {
+  const prev = carrito[id]||0, next = prev+d;
+  if (next<=0) delete carrito[id]; else carrito[id]=next;
+  renderProds(); updBar();
+  if (d>0) { const p=PRODS.find(x=>x.id===id); showToast(`${p.e} ${p.name} agregado`); }
+}
+
+function getTotalItems() { return Object.values(carrito).reduce((s,q)=>s+q,0); }
+function getTotal() {
+  return Object.entries(carrito).reduce((s,[id,qty])=>{
+    const p=PRODS.find(x=>x.id===+id); return s+(p?p.price*qty:0);
+  },0);
+}
+function updBar() {
+  const bar=document.getElementById('bottom-bar'), n=getTotalItems(), t=getTotal();
+  if(n===0){bar.classList.add('hidden');return;}
+  bar.classList.remove('hidden');
+  document.getElementById('bot-count').textContent=n;
+  document.getElementById('bot-total').textContent='$'+t;
+}
+
+function abrirCobro() {
+  if(!getTotalItems()) return;
+  montoStr=''; metodoPago='efectivo';
+  renderOrderSummary(); renderCobroUI();
+  document.getElementById('cobro-screen').classList.add('active');
+  document.getElementById('efectivo-sec').classList.remove('hidden');
+  document.getElementById('tarjeta-sec').classList.add('hidden');
+  document.getElementById('pay-ef').classList.add('selected');
+  document.getElementById('pay-tj').classList.remove('selected');
+}
+function cerrarCobro() { document.getElementById('cobro-screen').classList.remove('active'); }
+
+function renderOrderSummary() {
+  const items=Object.entries(carrito).map(([id,qty])=>({p:PRODS.find(x=>x.id===+id),qty}));
+  document.getElementById('order-items-list').innerHTML=items.map(({p,qty})=>
+    `<div class="order-item">
+      <div class="oi-left">
+        <span class="oi-emoji">${p.e}</span>
+        <div><div class="oi-name">${p.name}</div><div class="oi-qty">x${qty}</div></div>
+      </div>
+      <span class="oi-price">$${p.price*qty}</span>
+    </div>`
+  ).join('');
+  const sub=getTotal(), iva=Math.round(sub*0.16);
+  document.getElementById('order-totals').innerHTML=
+    `<div class="order-row"><span>Subtotal</span><span>$${sub-iva}</span></div>
+     <div class="order-row"><span>IVA (16%)</span><span>$${iva}</span></div>
+     <div class="order-row grand"><span>Total</span><span>$${sub}</span></div>`;
+  document.getElementById('cobrar-btn').textContent='Cobrar $'+sub;
+}
+
+function selPago(m) {
+  metodoPago=m;
+  document.getElementById('pay-ef').classList.toggle('selected',m==='efectivo');
+  document.getElementById('pay-tj').classList.toggle('selected',m==='tarjeta');
+  document.getElementById('efectivo-sec').classList.toggle('hidden',m!=='efectivo');
+  document.getElementById('tarjeta-sec').classList.toggle('hidden',m!=='tarjeta');
+  montoStr=''; renderCobroUI();
+}
+
+function renderCobroUI() {
+  const total=getTotal(), rec=parseFloat(montoStr)||0, cambio=rec-total;
+  document.getElementById('monto-display').textContent=montoStr?'$'+montoStr:'$0';
+  const cv=document.getElementById('cambio-val');
+  cv.textContent='$'+Math.abs(cambio).toFixed(2);
+  const box=document.getElementById('cambio-box');
+  const neg=cambio<0&&montoStr!=='';
+  box.classList.toggle('neg',neg);
+  cv.style.color=neg?'#e8174a':'#16a34a';
+}
+
+function np(v) {
+  if(v==='del') montoStr=montoStr.slice(0,-1);
+  else { if(montoStr.length>=7) return; montoStr+=v; }
+  renderCobroUI();
+}
+
+function procesarPago() {
+  const total=getTotal();
+  if(metodoPago==='efectivo') {
+    const rec=parseFloat(montoStr)||0;
+    if(rec<total){showToast('⚠️ Monto insuficiente');return;}
+    registrarVenta(total,rec);
+  } else { simularTarjeta(total); }
+}
+
+function simularTarjeta(total) {
+  const pm=document.getElementById('proc-modal');
+  pm.classList.remove('hidden');
+  const steps=['Procesando pago...','Comunicando con banco...','Autorizando...','¡Aprobado! ✓'];
+  let i=0;
+  const iv=setInterval(()=>{
+    document.getElementById('proc-msg').textContent=steps[i++];
+    if(i>=steps.length){clearInterval(iv);setTimeout(()=>{pm.classList.add('hidden');registrarVenta(total,total);},500);}
+  },650);
+}
+
+function registrarVenta(total,recibido) {
+  const folio='F-'+(folioN++);
+  const venta={
+    folio,
+    items:Object.entries(carrito).map(([id,qty])=>({...PRODS.find(x=>x.id===+id),qty})),
+    total, recibido,
+    cambio: metodoPago==='efectivo'?recibido-total:0,
+    metodo: metodoPago,
+    hora: new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),
+    fecha: new Date().toLocaleDateString('es-MX')
+  };
+  mostrarTicket(venta);
+}
+
+function mostrarTicket(v) {
+  document.getElementById('ticket-folio-sub').textContent=v.folio+' · '+v.hora;
+  const iva=Math.round(v.total*0.16);
+  let r=`<div class="tr-row"><span>Fecha</span><span>${v.fecha}</span></div>
+    <div class="tr-row"><span>Hora</span><span>${v.hora}</span></div>
+    <div class="tr-row"><span>Folio</span><span>${v.folio}</span></div>
+    <div class="tr-div"></div>`;
+  v.items.forEach(i=>{
+    r+=`<div class="tr-row"><span>${i.e} ${i.name} x${i.qty}</span><span>$${i.price*i.qty}</span></div>`;
+  });
+  r+=`<div class="tr-div"></div>
+    <div class="tr-row"><span>Subtotal</span><span>$${v.total-iva}</span></div>
+    <div class="tr-row"><span>IVA 16%</span><span>$${iva}</span></div>
+    <div class="tr-div"></div>
+    <div class="tr-total"><span>TOTAL</span><span>$${v.total}</span></div>
+    <div class="tr-row"><span>Método</span><span>${v.metodo==='efectivo'?'💵 Efectivo':'💳 Tarjeta'}</span></div>`;
+  if(v.metodo==='efectivo') {
+    r+=`<div class="tr-row"><span>Recibido</span><span>$${v.recibido.toFixed(2)}</span></div>
+        <div class="tr-cambio"><span>CAMBIO</span><span>$${v.cambio.toFixed(2)}</span></div>`;
+  }
+  r+=`<div class="tr-folio">${v.folio} · MODO ENTRENAMIENTO<br>¡Gracias por tu compra! 🎉</div>`;
+  document.getElementById('ticket-receipt').innerHTML=r;
+  document.getElementById('ticket-modal').classList.remove('hidden');
+}
+
+function nuevaVenta() {
+  document.getElementById('ticket-modal').classList.add('hidden');
+  document.getElementById('cobro-screen').classList.remove('active');
+  carrito={}; renderProds(); updBar();
+}
+function soloTicket() { document.getElementById('ticket-modal').classList.add('hidden'); document.getElementById('cobro-screen').classList.remove('active'); }
+
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),1800);
+}
+
+init();
+</script>
+</body>
+</html>
