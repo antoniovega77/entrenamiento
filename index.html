@@ -548,6 +548,7 @@ function goTo(id){
   const nxt=document.getElementById(id);
   nxt.style.display='flex';
   current=id;
+  if(typeof launchTutIfNeeded==='function') launchTutIfNeeded(id);
   if(id==='s-pedido') renderPedido();
   if(id==='s-propina') renderPropina();
   if(id==='s-metodo') document.getElementById('metodo-total').textContent='$'+getTotal().toFixed(2);
@@ -912,6 +913,268 @@ function showToast(msg){
 }
 
 init();
+
+// Auto-lanzar tutorial al cargar la app
+window.addEventListener('load', function() {
+  // Esperar a que todo esté listo
+  setTimeout(function() {
+    if (typeof tutInit === 'function') {
+      // Ir al catálogo primero si estamos en launch
+      if (current === 's-launch') {
+        // No mover - esperar que el usuario toque "Iniciar"
+        // pero modificar el botón para lanzar tutorial después
+      }
+    }
+  }, 300);
+});
 </script>
+
+
+<!-- ══════════ TUTORIAL PANTALLA POR PANTALLA ══════════ -->
+<div id="tut-wrap" style="display:none;position:fixed;inset:0;z-index:99999;top:0;left:0;right:0;bottom:0">
+
+  <!-- Fondo oscuro clickeable para cerrar -->
+  <div onclick="tutSkip()" style="position:absolute;inset:0;background:rgba(0,0,0,0.65)"></div>
+
+  <!-- Tarjeta del tutorial -->
+  <div id="tut-card" style="position:absolute;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:398px;background:#fff;border-radius:24px;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);z-index:2;transition:top 0.3s ease,bottom 0.3s ease">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;background:#E6006B;border-radius:50%;display:flex;align-items:center;justify-content:center">
+          <span id="tut-emoji" style="font-size:18px">🎓</span>
+        </div>
+        <div>
+          <p id="tut-step-lbl" style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;margin:0">PASO 1 DE 6</p>
+          <h3 id="tut-title" style="font-size:16px;font-weight:800;color:#111827;margin:0;line-height:1.2"></h3>
+        </div>
+      </div>
+      <button onclick="tutSkip()" style="width:32px;height:32px;border-radius:50%;background:#f3f4f6;border:none;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#9ca3af">✕</button>
+    </div>
+
+    <!-- Imagen / ilustración del paso -->
+    <div id="tut-img-wrap" style="background:#f9fafb;border-radius:16px;padding:16px;margin-bottom:14px;text-align:center">
+      <div id="tut-illustration" style="font-size:48px;margin-bottom:8px"></div>
+      <div id="tut-highlight" style="background:#E6006B;color:#fff;border-radius:12px;padding:8px 14px;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700"></div>
+    </div>
+
+    <!-- Descripción -->
+    <p id="tut-desc" style="font-size:14px;color:#4b5563;line-height:1.6;margin-bottom:16px"></p>
+
+    <!-- Tips -->
+    <div id="tut-tips" style="background:#fce4f3;border-radius:12px;padding:10px 14px;margin-bottom:16px;display:none">
+      <p id="tut-tips-text" style="font-size:12px;color:#9f1239;font-weight:600;margin:0"></p>
+    </div>
+
+    <!-- Dots -->
+    <div style="display:flex;gap:5px;justify-content:center;margin-bottom:16px" id="tut-dots"></div>
+
+    <!-- Botones -->
+    <div style="display:flex;gap:10px">
+      <button onclick="tutSkip()" style="flex:1;background:#f3f4f6;color:#6b7280;border:none;border-radius:14px;padding:13px;font-size:14px;font-weight:600;cursor:pointer">Saltar todo</button>
+      <button id="tut-btn" onclick="tutNext()" style="flex:2;background:#E6006B;color:#fff;border:none;border-radius:14px;padding:13px;font-size:15px;font-weight:700;cursor:pointer">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- Flecha indicadora animada -->
+  <div id="tut-pointer" style="display:none;position:absolute;font-size:32px;animation:bounce 0.8s infinite alternate;z-index:3">👆</div>
+</div>
+
+<style>
+  @keyframes bounce { from{transform:translateY(0)} to{transform:translateY(-10px)} }
+  @keyframes pulse-ring { 0%{transform:scale(1);opacity:1} 100%{transform:scale(1.6);opacity:0} }
+  .tut-pulse { animation: pulse-ring 1s infinite; }
+</style>
+
+<script>
+const TUTORIAL_STEPS = [
+  {
+    screen: 's-launch',
+    emoji: '🎓',
+    title: 'Bienvenido al Simulador',
+    illustration: '📱',
+    highlight: '⚡ Modo Entrenamiento Activo',
+    desc: 'Este simulador replica exactamente la app YoshiCash que usarás en el evento. Practica todas las funciones sin miedo — ningún cobro es real.',
+    tips: '💡 Puedes practicar cuantas veces quieras antes del evento.',
+    pos: 'center',
+    pointer: null,
+  },
+  {
+    screen: 's-catalogo',
+    emoji: '🛒',
+    title: 'Catálogo de Productos',
+    illustration: '🍔🍺🌮',
+    highlight: '👆 Toca la imagen para agregar',
+    desc: 'Aquí verás todos los productos disponibles. Toca la foto de cualquier producto para agregarlo al pedido. El botón rosado "+" también funciona.',
+    tips: '💡 El número rosa en la esquina indica cuántas unidades llevas de ese producto.',
+    pos: 'top',
+    pointer: '#prods-grid',
+  },
+  {
+    screen: 's-catalogo',
+    emoji: '🔢',
+    title: 'Controles de Cantidad',
+    illustration: '➖  1  ➕',
+    highlight: '− para quitar · + para agregar',
+    desc: 'Una vez que agregas un producto, aparecen los botones − y +. Toca − para quitar una unidad y + para agregar más. También puedes tocar la imagen directamente para sumar.',
+    tips: '💡 Si bajas la cantidad a 0, el producto desaparece del pedido automáticamente.',
+    pos: 'top',
+    pointer: null,
+  },
+  {
+    screen: 's-catalogo',
+    emoji: '💰',
+    title: 'Barra de Total',
+    illustration: '🧾',
+    highlight: 'Total · Continuar →',
+    desc: 'En la parte inferior siempre verás el total acumulado y cuántos items llevas. Cuando estés listo, toca "Continuar" para pasar al resumen del pedido.',
+    tips: '💡 El botón "Continuar" solo se activa cuando tienes al menos un producto.',
+    pos: 'bottom',
+    pointer: '#bot-bar',
+  },
+  {
+    screen: 's-catalogo',
+    emoji: '📋',
+    title: 'Flujo Completo de Venta',
+    illustration: '1️⃣ → 2️⃣ → 3️⃣ → 4️⃣ → ✅',
+    highlight: 'Catálogo → Pedido → Propina → Pago → Éxito',
+    desc: 'El proceso completo tiene 5 pasos:
+1. Agrega productos al carrito
+2. Revisa el pedido
+3. Selecciona propina
+4. Elige método de pago
+5. ¡Pago exitoso!',
+    tips: '💡 Practica el flujo completo varias veces para memorizarlo.',
+    pos: 'center',
+    pointer: null,
+  },
+  {
+    screen: 's-catalogo',
+    emoji: '🚀',
+    title: '¡Listo para practicar!',
+    illustration: '🎉',
+    highlight: '¡Ya conoces el sistema!',
+    desc: 'Ya sabes cómo funciona el simulador. Ahora practica el flujo completo. Recuerda: puedes volver a ver este tutorial tocando el botón ❓ en el menú.',
+    tips: null,
+    pos: 'center',
+    pointer: null,
+    isLast: true,
+  },
+];
+
+let tutStep = 0;
+let tutVisible = false;
+
+function tutInit() {
+  // Tutorial siempre activo en modo entrenamiento
+  tutVisible = true;
+  tutShow(0);
+}
+
+function tutShow(step) {
+  tutStep = step;
+  const s = TUTORIAL_STEPS[step];
+  const wrap = document.getElementById('tut-wrap');
+  const card = document.getElementById('tut-card');
+
+  wrap.style.display = 'block';
+
+  // Si el paso requiere otra pantalla, navegar a ella
+  if (s.screen && s.screen !== current) {
+    // Solo para s-catalogo - asegurar que estamos ahí
+  }
+
+  // Llenar contenido
+  document.getElementById('tut-emoji').textContent = s.emoji;
+  document.getElementById('tut-step-lbl').textContent = `PASO ${step+1} DE ${TUTORIAL_STEPS.length}`;
+  document.getElementById('tut-title').textContent = s.title;
+  document.getElementById('tut-illustration').textContent = s.illustration;
+  document.getElementById('tut-highlight').textContent = s.highlight;
+  document.getElementById('tut-desc').textContent = s.desc;
+
+  // Tips
+  const tipsEl = document.getElementById('tut-tips');
+  const tipsText = document.getElementById('tut-tips-text');
+  if (s.tips) {
+    tipsEl.style.display = 'block';
+    tipsText.textContent = s.tips;
+  } else {
+    tipsEl.style.display = 'none';
+  }
+
+  // Botón final
+  document.getElementById('tut-btn').textContent = s.isLast ? '¡Empezar ahora! 🚀' : 'Siguiente →';
+
+  // Dots
+  document.getElementById('tut-dots').innerHTML = TUTORIAL_STEPS.map((_, i) =>
+    `<div style="width:${i===step?'22px':'8px'};height:8px;border-radius:10px;background:${i===step?'#E6006B':'#e5e7eb'};transition:all 0.3s"></div>`
+  ).join('');
+
+  // Posicionar tarjeta
+  if (s.pos === 'bottom') {
+    card.style.bottom = '140px';
+    card.style.top = 'auto';
+  } else if (s.pos === 'top') {
+    card.style.top = '140px';
+    card.style.bottom = 'auto';
+  } else {
+    card.style.top = '50%';
+    card.style.transform = 'translateX(-50%) translateY(-50%)';
+    card.style.bottom = 'auto';
+  }
+
+  // Pointer
+  const ptr = document.getElementById('tut-pointer');
+  if (s.pointer) {
+    const el = document.querySelector(s.pointer);
+    if (el) {
+      const r = el.getBoundingClientRect();
+      ptr.style.display = 'block';
+      ptr.style.left = (r.left + r.width/2 - 16) + 'px';
+      ptr.style.top = s.pos === 'bottom'
+        ? (r.top - 50) + 'px'
+        : (r.top + r.height + 8) + 'px';
+    }
+  } else {
+    ptr.style.display = 'none';
+  }
+}
+
+function tutNext() {
+  if (tutStep >= TUTORIAL_STEPS.length - 1) {
+    tutSkip();
+    return;
+  }
+  // Reset transform para pasos no-center
+  const card = document.getElementById('tut-card');
+  card.style.transform = 'translateX(-50%)';
+  tutShow(tutStep + 1);
+}
+
+function tutSkip() {
+  document.getElementById('tut-wrap').style.display = 'none';
+  tutVisible = false;
+  // No guardar - el tutorial aparece siempre al iniciar
+}
+
+function tutReset() {
+  // reset
+  tutStep = 0;
+  tutShow(0);
+}
+
+// El tutorial se lanza desde goTo - se inyecta via patch en la función original
+let _tutLaunched = false;
+function launchTutIfNeeded(id) {
+  if (id === 's-catalogo' && !_tutLaunched) {
+    _tutLaunched = true;
+    setTimeout(function() {
+      if (typeof tutInit === 'function') tutInit();
+    }, 400);
+  }
+}
+</script>
+
 </body>
 </html>
