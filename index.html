@@ -1,9 +1,8 @@
-<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-<title>Yoshi POS — Simulador de Entrenamiento</title>
+<title>América vs Chivas POS — Simulador</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
@@ -21,6 +20,16 @@ tailwind.config = {
       },
       fontFamily: { display: ["Inter", "sans-serif"] },
       borderRadius: { DEFAULT: "12px" },
+      animation: {
+        'ping-slow': 'ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite',
+        'slide-up': 'slideUp 0.4s ease-out forwards',
+      },
+      keyframes: {
+        slideUp: {
+          '0%': { transform: 'translateY(100px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        }
+      }
     },
   },
 };
@@ -32,7 +41,6 @@ tailwind.config = {
   .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
   .screen { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: #F9FAFB; height: 100%; }
   .screen-hidden { display: none !important; }
-  .screen-left { display: none !important; }
   /* Scroll areas */
   .scroll-area { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 20px; }
   .scroll-area::-webkit-scrollbar { display: none; }
@@ -42,8 +50,10 @@ tailwind.config = {
   .receipt-edge { background: linear-gradient(135deg, transparent 5px, #fff 5px) top left, linear-gradient(225deg, transparent 5px, #fff 5px) top right; background-size: 14px 14px; background-repeat: repeat-x; height: 10px; }
   .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
   .sheet-overlay.hidden { display: none !important; }
-  /* Ensure hidden utility works everywhere */
   .hidden { display: none !important; }
+
+  /* Animación del escáner láser para QR */
+  @keyframes scanline { 0% { top: 0%; } 50% { top: 100%; } 100% { top: 0%; } }
 </style>
 </head>
 <body class="bg-bg-light text-slate-900 overflow-hidden h-screen w-full" style="max-width:430px;margin:0 auto;position:relative;">
@@ -60,8 +70,8 @@ tailwind.config = {
     </div>
     <div class="flex flex-col items-center gap-2 text-center">
       <h1 class="text-[32px] font-black text-slate-900 tracking-tight">Yoshi POS</h1>
-      <p class="text-slate-500 text-sm font-medium">Simulador de Entrenamiento</p>
-      <span class="bg-primary/10 text-primary text-xs font-bold px-3 py-1 rounded-full mt-1">MODO DEMO · Sin cobros reales</span>
+      <p class="text-slate-500 text-sm font-medium">América vs Chivas</p>
+      <span class="bg-primary/10 text-primary text-xs font-bold px-3 py-1 rounded-full mt-1">MODO ENTRENAMIENTO</span>
     </div>
   </div>
   <div class="flex-1 flex flex-col justify-end pb-12">
@@ -71,7 +81,7 @@ tailwind.config = {
         Iniciar Simulador
       </button>
     </div>
-    <p class="text-center text-slate-400 text-xs font-medium">Powered by EventTech · v2.0</p>
+    <p class="text-center text-slate-400 text-xs font-medium">Barra Lateral · Julio Cesar</p>
   </div>
 </div>
 
@@ -85,27 +95,28 @@ tailwind.config = {
           <span class="ms text-slate-600">menu</span>
         </button>
         <div>
-          <h1 class="font-black text-[17px] text-slate-900 leading-tight" id="ev-title">Festival de Verano 2024</h1>
-          <p class="text-xs text-slate-500 font-medium">Carl's Jr. · Barra Norte</p>
+          <h1 class="font-black text-[17px] text-slate-900 leading-tight" id="ev-title">América vs Chivas</h1>
+          <p class="text-xs text-slate-500 font-medium">Barra Lateral · Julio Cesar</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <button id="lang-btn" onclick="openSheet('sh-idioma')" class="w-9 h-9 flex items-center justify-center rounded-full bg-slate-50 border border-slate-200 text-lg">🇪🇸</button>
-        <button onclick="showToast('🔄 Sincronizando...')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
-          <span class="ms text-slate-500">sync</span>
+        <button onclick="simulateRefresh()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
+          <span class="ms text-slate-500 refresh-icon">sync</span>
         </button>
       </div>
     </div>
     <!-- Filter bar -->
-    <div class="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-3">
-      <button class="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 border-none">
-        <span class="ms text-slate-500" style="font-size:18px">search</span>
-      </button>
-      <button onclick="openSheet('sh-promo')" class="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100">
-        <span class="ms text-slate-500" style="font-size:18px">qr_code_scanner</span>
-      </button>
+    <div id="categories-bar" class="flex items-center gap-3 overflow-x-auto hide-scrollbar pb-3 px-2 cursor-grab select-none">
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <button class="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-50 border border-slate-200 transition-colors">
+          <span class="ms text-slate-500" style="font-size:20px">search</span>
+        </button>
+        <button class="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-50 border border-slate-200 transition-colors">
+          <span class="ms text-slate-500" style="font-size:20px">qr_code_scanner</span>
+        </button>
+      </div>
       <div class="w-px h-6 bg-slate-200 flex-shrink-0"></div>
-      <div id="pills" class="flex gap-2"></div>
+      <div id="pills" class="flex gap-2 flex-shrink-0"></div>
     </div>
   </div>
   <!-- Grid -->
@@ -143,17 +154,13 @@ tailwind.config = {
   <div class="scroll-area px-4" style="padding-bottom:180px" id="order-scroll"></div>
   <div class="bottom-bar-fixed">
     <div class="flex flex-col gap-2 mb-3">
-      <button id="btn-cuenta" onclick="goTo('s-cuenta')" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 text-slate-600 font-medium text-sm">
-        <span class="ms text-primary" style="font-size:20px">person_add</span>
-        <span id="cuenta-label">Agregar a Cuenta</span>
-      </button>
       <button id="btn-nota" onclick="openSheet('sh-nota')" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 text-slate-400 text-sm">
         <span class="ms" style="font-size:20px">edit_note</span>
         <span id="nota-label">Agregar comentario al pedido...</span>
       </button>
     </div>
     <div class="flex items-baseline justify-between mb-3">
-      <div><span class="font-black text-[15px]">Total</span><span class="text-slate-400 text-sm ml-1" id="pedido-count">(0 artículos)</span></div>
+      <div><span class="font-black text-[15px]">Subtotal</span><span class="text-slate-400 text-sm ml-1" id="pedido-count">(0 artículos)</span></div>
       <span class="text-2xl font-black" id="pedido-total">$0.00</span>
     </div>
     <button onclick="goTo('s-propina')" class="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95">
@@ -169,14 +176,12 @@ tailwind.config = {
       <span class="ms text-slate-700">arrow_back</span>
     </button>
     <h2 class="flex-1 text-center font-black text-[17px]">Seleccionar Propina</h2>
-    <button onclick="showToast('↗ Compartir orden')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
-      <span class="ms text-slate-500">ios_share</span>
-    </button>
+    <div class="w-9"></div>
   </div>
   <div class="scroll-area px-4 py-6">
     <p class="text-center text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">SUBTOTAL A PAGAR</p>
     <p class="text-center text-5xl font-black tracking-tight mb-2" id="prop-sub">$0.00</p>
-    <p class="text-center text-primary font-semibold text-sm mb-8 cursor-pointer">Dividir esta cuenta</p>
+    <p class="text-center text-primary font-semibold text-sm mb-8 cursor-pointer">Dividir pago</p>
     <div class="grid grid-cols-3 gap-3 mb-5" id="prop-grid"></div>
     <div class="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 flex items-center justify-between">
       <span class="text-slate-500 font-medium">Monto Propina</span>
@@ -218,7 +223,7 @@ tailwind.config = {
       Confirmar Propina <span class="ms" style="font-size:20px">check</span>
     </button>
   </div>
-  <!-- Numpad -->
+  <!-- Numpad Custom Propina -->
   <div class="grid grid-cols-3 border-t border-slate-100 flex-shrink-0">
     <button onclick="npC('1')" class="py-5 text-2xl font-bold border-r border-b border-slate-100 active:bg-slate-50">1</button>
     <button onclick="npC('2')" class="py-5 text-2xl font-bold border-r border-b border-slate-100 active:bg-slate-50">2</button>
@@ -231,9 +236,7 @@ tailwind.config = {
     <button onclick="npC('9')" class="py-5 text-2xl font-bold border-b border-slate-100 active:bg-slate-50">9</button>
     <button onclick="npC('.')" class="py-5 text-2xl font-bold border-r border-slate-100 active:bg-slate-50">.</button>
     <button onclick="npC('0')" class="py-5 text-2xl font-bold border-r border-slate-100 active:bg-slate-50">0</button>
-    <button onclick="npC('del')" class="py-5 flex items-center justify-center active:bg-slate-50">
-      <span class="ms text-primary">backspace</span>
-    </button>
+    <button onclick="npC('del')" class="py-5 flex items-center justify-center active:bg-slate-50"><span class="ms text-primary">backspace</span></button>
   </div>
 </div>
 
@@ -249,36 +252,26 @@ tailwind.config = {
   <div class="scroll-area px-4 py-6">
     <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 text-center">TOTAL A PAGAR</p>
     <p class="text-5xl font-black tracking-tight text-center mb-8" id="metodo-total">$0.00</p>
+    
     <div class="flex flex-col gap-3" id="metodo-options">
+      <!-- Opción Tarjeta -->
       <div onclick="selMetodo('tarjeta')" class="metodo-opt selected bg-surface border-2 border-primary rounded-2xl px-5 py-4 flex items-center gap-4 cursor-pointer transition-all" data-m="tarjeta">
         <div class="w-11 h-11 rounded-2xl bg-blue-50 flex items-center justify-center flex-shrink-0">
           <span class="ms text-blue-500" style="font-variation-settings:'FILL' 1;">credit_card</span>
         </div>
-        <span class="font-bold text-[16px] flex-1">Tarjeta</span>
+        <span class="font-bold text-[16px] flex-1">Tarjeta de crédito/débito</span>
         <div class="w-6 h-6 rounded-full border-2 border-primary flex items-center justify-center">
           <div class="w-3 h-3 rounded-full bg-primary"></div>
         </div>
       </div>
+      <!-- Opción QR -->
       <div onclick="selMetodo('qr')" class="metodo-opt bg-surface border-2 border-slate-200 rounded-2xl px-5 py-4 flex items-center gap-4 cursor-pointer transition-all" data-m="qr">
         <div class="w-11 h-11 rounded-2xl bg-purple-50 flex items-center justify-center flex-shrink-0">
           <span class="ms text-purple-500" style="font-variation-settings:'FILL' 1;">qr_code_2</span>
         </div>
-        <span class="font-bold text-[16px] flex-1">Pago QR</span>
+        <span class="font-bold text-[16px] flex-1">Pago con QR</span>
         <div class="w-6 h-6 rounded-full border-2 border-slate-300"></div>
       </div>
-      <div onclick="selMetodo('efectivo')" class="metodo-opt bg-surface border-2 border-slate-200 rounded-2xl px-5 py-4 flex items-center gap-4 cursor-pointer transition-all" data-m="efectivo">
-        <div class="w-11 h-11 rounded-2xl bg-green-50 flex items-center justify-center flex-shrink-0">
-          <span class="ms text-green-600" style="font-variation-settings:'FILL' 1;">payments</span>
-        </div>
-        <span class="font-bold text-[16px] flex-1">Efectivo</span>
-        <div class="w-6 h-6 rounded-full border-2 border-slate-300" id="r-ef"></div>
-      </div>
-    </div>
-    <!-- Efectivo info -->
-    <div id="ef-info" class="hidden mt-4 bg-green-50 border border-green-100 rounded-2xl p-4 text-center">
-      <span class="ms text-green-600 text-4xl block mb-2" style="font-variation-settings:'FILL' 1;">payments</span>
-      <p class="font-bold text-green-800">Pago en Efectivo</p>
-      <p class="text-sm text-green-600 mt-1">Presiona "Confirmar Pago" para registrar la venta</p>
     </div>
   </div>
   <div class="bottom-bar-fixed">
@@ -288,26 +281,174 @@ tailwind.config = {
   </div>
 </div>
 
-<!-- ══════════════════ CREAR CUENTA ══════════════════ -->
-<div class="screen" id="s-cuenta" style="display:none;background:#fff">
-  <div class="bg-surface px-4 py-4 border-b border-slate-100 flex items-center gap-3 flex-shrink-0">
-    <button onclick="goBack('s-pedido')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
-      <span class="ms text-slate-700">arrow_back</span>
-    </button>
-    <h2 class="flex-1 text-center font-black text-[17px]">Crear Nueva Cuenta</h2>
-    <div class="w-9"></div>
-  </div>
-  <div class="scroll-area flex flex-col items-center justify-center px-6">
-    <div class="w-full border-b-2 border-primary mb-2">
-      <input id="cuenta-input" type="text" maxlength="40" placeholder=""
-        class="w-full text-2xl font-bold text-center bg-transparent border-none outline-none py-2 placeholder-slate-200"/>
+<!-- ══════════════════ FLUJO DINÁMICO TARJETA ══════════════════ -->
+<div class="screen" id="s-tarjeta-flow" style="display:none; background-color:#009de0; transition: background-color 0.3s ease;">
+    <!-- Header Fijo Superior -->
+    <div class="px-4 py-4 flex items-center justify-between flex-shrink-0 z-10">
+       <div class="flex gap-1.5">
+           <div class="w-2 h-2 rounded-full bg-[#ef4444]"></div>
+           <div class="w-2 h-2 rounded-full bg-[#eab308]"></div>
+           <div class="w-2 h-2 rounded-full bg-[#22c55e]"></div>
+           <div class="w-2 h-2 rounded-full bg-[#3b82f6]"></div>
+       </div>
+       <div class="w-8"></div>
     </div>
-    <p class="text-sm text-slate-400">Identifica esta cuenta</p>
-  </div>
-  <div class="bottom-bar-fixed">
-    <button onclick="guardarCuenta()" class="w-full bg-primary text-white font-bold py-4 rounded-2xl active:scale-95">
-      Guardar y Asignar
+
+    <!-- Spin Logo & Title -->
+    <div class="text-center text-white z-10 flex-shrink-0">
+        <div class="text-xl font-bold tracking-tight flex items-center justify-center gap-1 mb-1">
+            spin <span class="text-[11px] font-normal align-top pt-1 leading-tight">negocios</span>
+        </div>
+        <h2 class="text-[18px] font-medium opacity-95">Venta con tarjeta</h2>
+        <div class="text-[46px] font-bold mt-1 tracking-tight" id="tf-monto">$0.00</div>
+    </div>
+
+    <!-- ÁREAS DINÁMICAS -->
+    <div class="flex-1 flex flex-col justify-center items-center relative z-10 w-full" id="tf-dynamic-area">
+        <!-- FASE 1: Aproxime -->
+        <div id="tf-fase-aproxime" class="w-full flex flex-col items-center absolute inset-0 pt-8 transition-opacity">
+            <div class="relative w-40 h-40 flex items-center justify-center cursor-pointer" onclick="setTarjetaState('leyendo')">
+                <div class="absolute inset-0 bg-white/20 rounded-full animate-ping-slow"></div>
+                <div class="absolute inset-4 bg-white/30 rounded-full animate-ping-slow" style="animation-delay: 0.5s;"></div>
+                <div class="relative w-24 h-24 bg-white/90 rounded-full shadow-[0_0_25px_rgba(255,255,255,0.4)]"></div>
+            </div>
+            <p class="text-white text-[20px] mt-14 font-medium px-8 text-center leading-snug">Aproxime, inserte o<br>deslice su tarjeta</p>
+            <button class="mt-8 bg-white/20 text-white font-medium px-10 py-3 rounded-full active:bg-white/30 transition-colors" onclick="showCancelModal()">Cancelar</button>
+        </div>
+
+        <!-- FASE 2: Leyendo -->
+        <div id="tf-fase-leyendo" class="hidden w-full flex flex-col items-center absolute inset-0 pt-8">
+            <div class="relative w-40 h-40 flex items-center justify-center">
+                <div class="relative w-24 h-24 bg-white/90 rounded-full"></div>
+            </div>
+            <p class="text-white text-[20px] mt-14 font-medium px-8 text-center leading-snug">Leyendo...</p>
+        </div>
+
+        <!-- FASE 3: NIP -->
+        <div id="tf-fase-nip" class="hidden w-full flex flex-col items-center absolute inset-0 pt-8">
+            <p class="text-white text-[18px] font-medium px-8 text-center mb-6">Ingrese su firma electrónica</p>
+            <div class="text-white text-5xl tracking-[0.4em] font-black h-12" id="tf-nip-display"></div>
+        </div>
+
+        <!-- FASE 4: Autorizando -->
+        <div id="tf-fase-autorizando" class="hidden w-full flex flex-col items-center absolute inset-0 pt-16">
+            <p class="text-white text-[19px] font-medium px-8 text-center mb-8">Esperando autorización...</p>
+            <div class="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+        </div>
+
+        <!-- FASE 5: Aprobada -->
+        <div id="tf-fase-aprobada" class="hidden w-full flex flex-col items-center absolute inset-0 pt-10">
+            <div class="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mb-8 relative">
+                <div class="absolute inset-0 bg-white/20 rounded-full animate-ping"></div>
+                <span class="ms text-white" style="font-size: 50px; font-weight: bold;">check</span>
+            </div>
+            <p class="text-white text-[22px] font-medium px-8 text-center">Transacción aprobada</p>
+        </div>
+    </div>
+
+    <!-- MODAL "RETIRA TU TARJETA" -->
+    <div id="tf-modal-retira" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl p-8 flex flex-col items-center shadow-2xl w-64 animate-slide-up">
+            <div class="w-14 h-24 border-[3px] border-slate-300 rounded-lg relative mb-4 flex flex-col items-center justify-end overflow-hidden">
+               <div class="w-full h-1/2 bg-[#009de0] absolute top-0"></div>
+               <div class="w-8 h-10 bg-slate-200 border-2 border-slate-300 rounded-md absolute -bottom-4 animate-bounce"></div>
+            </div>
+            <div class="flex gap-4 mb-5">
+                <span class="ms text-[#009de0] font-bold" style="font-size: 28px;">arrow_downward</span>
+                <span class="ms text-[#009de0] font-bold" style="font-size: 28px;">arrow_downward</span>
+            </div>
+            <p class="text-slate-800 text-center font-bold text-lg leading-tight">Por favor retira tu tarjeta</p>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMAR CANCELACIÓN (NUEVO) -->
+    <div id="tf-modal-cancel-confirm" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+        <div class="bg-[#d2e3fc] rounded-2xl p-6 flex flex-col items-center shadow-2xl w-72 animate-slide-up text-[#1e3a8a]">
+            <p class="text-center text-[18px] leading-snug mb-6 font-medium">¿Está seguro de que<br>quiere cancelar la<br>transacción?</p>
+            <div class="flex gap-3 w-full">
+                <button onclick="hideCancelModal()" class="flex-1 py-2.5 rounded-full border border-[#1e3a8a] text-[#1e3a8a] font-medium active:bg-[#bfdbfe] transition-colors text-sm">Cancelar</button>
+                <button onclick="confirmCancelTransaction()" class="flex-1 py-2.5 rounded-full bg-[#0284c7] text-white font-medium active:bg-[#0369a1] transition-colors text-sm">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTERS DE LA PANTALLA TARJETA -->
+    <div id="tf-footer-logos" class="bg-white py-4 px-5 flex justify-between items-center z-10 w-full rounded-t-3xl shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/Visa_Logo.png" alt="Visa" class="h-4 object-contain opacity-80">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Mastercard-logo.svg" alt="Mastercard" class="h-6 object-contain opacity-80">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/f/fa/American_Express_logo_%(2018%).svg" alt="Amex" class="h-6 object-contain opacity-80">
+        <span class="text-[11px] font-black text-[#1d3368] opacity-80 tracking-widest">CARNET</span>
+    </div>
+
+    <div id="tf-footer-mc" class="hidden bg-white py-5 px-4 flex justify-center items-center z-10 w-full rounded-t-3xl mt-auto shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
+        <div class="bg-white border border-slate-100 shadow-sm rounded-2xl px-6 py-2">
+           <img src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Mastercard-logo.svg" alt="Mastercard" class="h-8 object-contain">
+        </div>
+    </div>
+
+    <!-- Numpad Personalizado -->
+    <div id="tf-numpad-container" class="hidden w-full z-20 mt-auto">
+        <div class="grid grid-cols-4 gap-px bg-slate-300 border-t border-slate-300">
+            <button onclick="pTFNip('1')" class="bg-white py-5 text-[28px] font-semibold text-slate-800 active:bg-slate-100">1</button>
+            <button onclick="pTFNip('2')" class="bg-white py-5 text-[28px] font-semibold text-slate-800 active:bg-slate-100">2</button>
+            <button onclick="pTFNip('3')" class="bg-white py-5 text-[28px] font-semibold text-slate-800 active:bg-slate-100">3</button>
+            <button onclick="pTFNip('cancel')" class="bg-[#ef4444] py-5 text-white flex justify-center items-center active:bg-red-600 transition-colors"><span class="ms" style="font-size:32px">close</span></button>
+            <button onclick="pTFNip('4')" class="bg-white py-5 text-[28px] font-semibold text-slate-800 active:bg-slate-100">4</button>
+            <button onclick="pTFNip('5')" class="bg-white py-5 text-[28px] font-semibold text-slate-800 active:bg-slate-100">5</button>
+            <button onclick="pTFNip('6')" class="bg-white py-5 text-[28px] font-semibold text-slate-800 active:bg-slate-100">6</button>
+            <button onclick="pTFNip('clear')" class="bg-[#eab308] py-5 text-white flex justify-center items-center active:bg-yellow-500 transition-colors"><span class="ms" style="font-size:32px">arrow_back</span></button>
+            <button onclick="pTFNip('7')" class="bg-white py-5 text-[28px] font-semibold text-slate-800 active:bg-slate-100">7</button>
+            <button onclick="pTFNip('8')" class="bg-white py-5 text-[28px] font-semibold text-slate-800 active:bg-slate-100">8</button>
+            <button onclick="pTFNip('9')" class="bg-white py-5 text-[28px] font-semibold text-slate-800 active:bg-slate-100">9</button>
+            <button onclick="tfSubmitNip()" class="bg-[#22c55e] text-white flex justify-center items-center active:bg-green-600 transition-colors" style="grid-row: span 2;"><span class="ms" style="font-size:42px; transform: scaleX(-1) rotate(90deg);">keyboard_return</span></button>
+            <button class="bg-[#e5e7eb] py-5 pointer-events-none"></button>
+            <button onclick="pTFNip('0')" class="bg-white py-5 text-[28px] font-semibold text-slate-800 active:bg-slate-100">0</button>
+            <button class="bg-[#e5e7eb] py-5 pointer-events-none"></button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════ ESCANER QR ══════════════════ -->
+<div class="screen" id="s-qr" style="display:none;background:#000">
+  
+  <!-- Cabecera transparente -->
+  <div class="px-4 py-4 flex items-center gap-3 flex-shrink-0 z-20 relative">
+    <button onclick="goBack('s-metodo')" class="w-10 h-10 flex items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors backdrop-blur-md">
+      <span class="ms">arrow_back</span>
     </button>
+    <h2 class="flex-1 text-center font-bold text-[18px] text-white tracking-wide pr-10">Escanear QR</h2>
+  </div>
+  
+  <!-- Área interactiva para simular escaneo -->
+  <div class="flex-1 flex flex-col items-center relative z-10 w-full cursor-pointer" onclick="procesarPagoQrExito()" title="Haz clic en la cámara para simular escaneo">
+    
+    <!-- Píldora de instrucción -->
+    <div class="mt-4 mb-auto bg-black/60 backdrop-blur-md rounded-[30px] px-6 py-4 text-center">
+       <p class="text-white text-[16px] font-medium leading-snug">Escanea el código QR del<br>cliente</p>
+    </div>
+
+    <!-- Marco del escáner -->
+    <div class="relative w-[260px] h-[260px] mb-auto">
+      <!-- Esquinas blancas -->
+      <div class="absolute top-0 left-0 w-10 h-10 border-t-[4px] border-l-[4px] border-white rounded-tl-[16px]"></div>
+      <div class="absolute top-0 right-0 w-10 h-10 border-t-[4px] border-r-[4px] border-white rounded-tr-[16px]"></div>
+      <div class="absolute bottom-0 left-0 w-10 h-10 border-b-[4px] border-l-[4px] border-white rounded-bl-[16px]"></div>
+      <div class="absolute bottom-0 right-0 w-10 h-10 border-b-[4px] border-r-[4px] border-white rounded-br-[16px]"></div>
+      
+      <!-- Láser animado -->
+      <div class="absolute left-2 right-2 h-[2px] bg-[#E6006B] shadow-[0_0_15px_#E6006B]" style="animation: scanline 2s ease-in-out infinite alternate;">
+         <!-- Puntito brillante en el centro del láser -->
+         <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_5px_#fff]"></div>
+      </div>
+    </div>
+    
+    <!-- Botón linterna flotante -->
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-20">
+      <button class="w-[60px] h-[60px] bg-[#E6006B] rounded-full flex items-center justify-center text-white shadow-[0_0_20px_rgba(230,0,107,0.6)] active:scale-95 transition-transform" onclick="event.stopPropagation(); showToast('Linterna activada');">
+        <span class="ms" style="font-size:28px; font-variation-settings:'FILL' 1;">flashlight_on</span>
+      </button>
+    </div>
+    <p class="text-white/40 text-xs absolute bottom-28">[ Clic en la cámara para simular escaneo ]</p>
   </div>
 </div>
 
@@ -344,18 +485,10 @@ tailwind.config = {
         </div>
         <div class="space-y-2 mb-4" id="exito-items"></div>
         <hr class="border-dashed border-slate-200 my-3"/>
-        <div class="space-y-1.5 mb-4" id="exito-totals"></div>
-        <!-- Payment info -->
-        <div class="bg-slate-50 rounded-xl p-3 flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <span class="ms text-primary" style="font-size:18px;font-variation-settings:'FILL' 1;" id="exito-method-icon">credit_card</span>
-          </div>
-          <div class="flex-1">
-            <p class="text-xs font-bold text-slate-700" id="exito-method-label">Visa terminada en 4242</p>
-            <p class="text-xs text-slate-400" id="exito-auth-label">Auth: 892011</p>
-          </div>
-          <span class="ms text-emerald-500" style="font-variation-settings:'FILL' 1;">check_circle</span>
-        </div>
+        
+        <!-- Totales dinámicos y Saldo info -->
+        <div class="space-y-1.5 mb-4" id="exito-totals-box"></div>
+
       </div>
       <div class="receipt-edge bg-slate-50 rotate-180 rounded-t-lg"></div>
       <div class="h-2 bg-white w-full"></div>
@@ -372,6 +505,114 @@ tailwind.config = {
   </div>
 </div>
 
+<!-- ══════════════════ PAGO RECHAZADO / CANCELADO (NUEVO) ══════════════════ -->
+<div class="screen" id="s-cancelado" style="display:none;background:#f9fafb">
+  <!-- Header -->
+  <div class="px-4 pt-4 pb-2 flex items-center justify-between flex-shrink-0">
+    <div class="w-9"></div>
+    <h2 class="text-center font-bold text-[18px] text-slate-800">Cancelado por el Usuario</h2>
+    <div class="w-9"></div>
+  </div>
+  <div class="flex justify-center mb-4 flex-shrink-0">
+     <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white"><span class="ms" style="font-size:20px;font-variation-settings:'FILL' 1">info</span></div>
+  </div>
+
+  <div class="scroll-area px-4 pb-6 flex flex-col h-full">
+    <!-- Píldora de estado -->
+    <div class="bg-red-50 text-primary text-center font-bold py-3.5 rounded-2xl mb-5 tracking-wide shadow-sm">
+        PAGO RECHAZADO
+    </div>
+    
+    <!-- Info del pedido -->
+    <div class="bg-slate-100/80 border border-slate-200 rounded-2xl p-4 mb-6 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+            <span class="font-bold text-slate-800 text-[15px]" id="cancel-order-id">#9HFPF71P</span>
+            <span class="bg-primary text-white font-bold text-sm px-3 py-1 rounded-full shadow-sm" id="cancel-total">$0.00</span>
+        </div>
+        <div class="flex items-center gap-2 mb-5">
+            <div class="w-7 h-7 rounded-full bg-primary text-white font-black text-xs flex items-center justify-center" id="cancel-qty">0</div>
+            <span class="text-[14px] text-slate-700 font-medium">Piezas</span>
+        </div>
+        <div class="flex justify-between items-center text-slate-500 text-[13px]">
+            <span id="cancel-date">08 May. 18:27</span>
+            <span class="font-bold text-slate-700 tracking-widest">RC N</span>
+        </div>
+    </div>
+
+    <!-- Botones de Acción -->
+    <div class="mt-auto flex flex-col gap-3">
+        <button onclick="showToast('🖨️ Imprimiendo recibo...')" class="w-full bg-transparent border border-primary text-primary font-bold py-3.5 rounded-full active:bg-primary/5 transition-colors text-sm">Imprimir recibo</button>
+        <button onclick="goTo('s-metodo')" class="w-full bg-transparent border border-primary text-primary font-bold py-3.5 rounded-full active:bg-primary/5 transition-colors text-sm">Intentar con otro método de pago</button>
+        <button onclick="vaciarPedidoFromCancel()" class="w-full bg-transparent border border-primary text-primary font-bold py-3.5 rounded-full active:bg-primary/5 transition-colors text-sm">Cancelar Venta</button>
+        <button onclick="retryCardPayment()" class="w-full bg-primary text-white font-bold py-3.5 rounded-full shadow-lg shadow-primary/20 active:scale-95 transition-transform text-sm mt-1">Intentar de nuevo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= RESUMEN DE VENTAS ================= -->
+<div class="screen" id="s-ventas" style="display:none">
+  <!-- Header -->
+  <div class="bg-surface px-4 py-4 border-b border-slate-100 flex items-center gap-3 flex-shrink-0">
+    <button onclick="openSheet('sh-menu')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
+      <span class="ms text-slate-700">menu</span>
+    </button>
+    <h2 class="flex-1 text-center font-black text-[17px]">Historial</h2>
+    <button onclick="simulateRefresh()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
+      <span class="ms text-slate-500 refresh-icon">sync</span>
+    </button>
+  </div>
+  <div class="scroll-area px-4 py-6">
+    <div class="flex items-center gap-2 mb-6">
+       <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+       <span class="text-xs text-slate-500 font-medium sync-time">Última sincronización: Hoy 12:00</span>
+    </div>
+    <div class="grid grid-cols-2 gap-3 mb-6">
+       <div class="bg-slate-100 rounded-2xl p-4 text-center">
+         <p class="text-xs font-bold text-slate-500 uppercase">Total Ventas</p>
+         <p class="text-xl font-black mt-1 text-slate-900" id="v-total-ventas">$0.00</p>
+       </div>
+       <div class="bg-slate-100 rounded-2xl p-4 text-center">
+         <p class="text-xs font-bold text-slate-500 uppercase">Propinas</p>
+         <p class="text-xl font-black mt-1 text-slate-900" id="v-total-propinas">$0.00</p>
+       </div>
+    </div>
+    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">CAPACITACION</p>
+    <div class="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm" id="v-items">
+        <!-- Items de ventas -->
+    </div>
+  </div>
+  <div class="bottom-bar-fixed">
+    <button class="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95" onclick="showToast('🖨️ Imprimiendo resumen...')">
+      Imprimir resumen
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════ ÓRDENES ══════════════════ -->
+<div class="screen" id="s-ordenes" style="display:none">
+  <!-- Header -->
+  <div class="bg-surface px-4 py-4 border-b border-slate-100 flex items-center gap-3 flex-shrink-0">
+    <button onclick="openSheet('sh-menu')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
+      <span class="ms text-slate-700">menu</span>
+    </button>
+    <h2 class="flex-1 text-center font-black text-[17px]">Órdenes</h2>
+    <button onclick="simulateRefresh()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
+      <span class="ms text-slate-500 refresh-icon">sync</span>
+    </button>
+  </div>
+  <div class="scroll-area px-4 py-6">
+    <div class="flex items-center gap-2 mb-4">
+       <span class="text-xs text-slate-500 font-medium sync-time">Última sincronización: Hoy 12:00</span>
+    </div>
+    <div class="bg-slate-100 rounded-2xl p-3 text-center mb-6">
+        <span class="text-sm font-bold text-slate-700">Ordenes sincronizadas: <span id="o-count">0/0</span></span>
+    </div>
+    <div class="flex flex-col gap-3" id="o-list">
+        <!-- Listado de órdenes -->
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════ SHEETS ══════════════════ -->
 
 <!-- MENÚ / SIDEBAR -->
@@ -382,21 +623,21 @@ tailwind.config = {
         <span class="ms" style="font-variation-settings:'FILL' 1;font-size:20px">point_of_sale</span>
       </div>
       <div>
-        <h2 class="font-black text-lg leading-tight text-slate-900">Yoshi POS</h2>
-        <p class="text-xs text-slate-400 font-medium uppercase tracking-widest">Simulador</p>
+        <h2 class="font-black text-lg leading-tight text-slate-900">América vs Chivas</h2>
+        <p class="text-xs text-slate-400 font-medium uppercase tracking-widest">Julio Cesar</p>
       </div>
     </div>
     <nav class="flex-1 space-y-1">
-      <a href="#" class="flex items-center gap-4 bg-primary/10 text-primary rounded-xl px-4 py-3 font-semibold text-sm">
-        <span class="ms" style="font-variation-settings:'FILL' 1;">storefront</span> Catálogo
+      <a href="#" id="link-vender" onclick="goTo('s-catalogo'); closeSheet('sh-menu')" class="sidebar-link flex items-center gap-4 bg-primary/10 text-primary rounded-xl px-4 py-3 font-semibold text-sm">
+        <span class="ms" style="font-variation-settings:'FILL' 1;">storefront</span> Vender
       </a>
-      <a href="#" class="flex items-center gap-4 text-slate-500 rounded-xl px-4 py-3 text-sm">
-        <span class="ms">receipt_long</span> Historial
+      <a href="#" id="link-ventas" onclick="goTo('s-ventas'); closeSheet('sh-menu')" class="sidebar-link flex items-center gap-4 text-slate-500 rounded-xl px-4 py-3 text-sm">
+        <span class="ms">history</span> Historial
       </a>
-      <a href="#" class="flex items-center gap-4 text-slate-500 rounded-xl px-4 py-3 text-sm">
-        <span class="ms">bar_chart</span> Resumen
+      <a href="#" id="link-ordenes" onclick="goTo('s-ordenes'); closeSheet('sh-menu')" class="sidebar-link flex items-center gap-4 text-slate-500 rounded-xl px-4 py-3 text-sm">
+        <span class="ms">receipt_long</span> Órdenes
       </a>
-      <a href="#" class="flex items-center gap-4 text-slate-500 rounded-xl px-4 py-3 text-sm">
+      <a href="#" onclick="closeSheet('sh-menu'); showToast('⚠️ Módulo bloqueado')" class="flex items-center gap-4 text-slate-400 rounded-xl px-4 py-3 text-sm">
         <span class="ms">settings</span> Configuración
       </a>
     </nav>
@@ -408,49 +649,17 @@ tailwind.config = {
   </div>
 </div>
 
-<!-- IDIOMA -->
-<div class="sheet-overlay hidden" id="sh-idioma" onclick="if(event.target===this)closeSheet('sh-idioma')">
-  <div class="bg-white w-full max-w-[430px] rounded-t-3xl p-6 shadow-2xl" onclick="e=>e.stopPropagation()">
+<!-- ELIMINAR PEDIDO -->
+<div class="sheet-overlay hidden" id="sh-delete" onclick="if(event.target===this)closeSheet('sh-delete')">
+  <div class="bg-white w-full max-w-[430px] rounded-t-3xl px-6 pt-5 pb-safe text-center shadow-2xl" onclick="e=>e.stopPropagation()">
     <div class="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5"></div>
-    <h3 class="font-black text-xl mb-1">Seleccionar Idioma</h3>
-    <p class="text-slate-400 text-sm mb-5">Elige tu idioma preferido para la interfaz</p>
-    <div class="flex flex-col gap-3 mb-5" id="lang-opts">
-      <div onclick="selLang('es','🇪🇸','Español (ES)')" class="lang-opt border-2 border-primary rounded-2xl px-4 py-4 flex items-center gap-4 cursor-pointer" data-lang="es">
-        <span class="text-2xl">🇪🇸</span><span class="flex-1 font-bold">Español (ES)</span>
-        <span class="ms text-primary" style="font-variation-settings:'FILL' 1;">radio_button_checked</span>
-      </div>
-      <div onclick="selLang('en','🇺🇸','English (EN)')" class="lang-opt border-2 border-slate-200 rounded-2xl px-4 py-4 flex items-center gap-4 cursor-pointer" data-lang="en">
-        <span class="text-2xl">🇺🇸</span><span class="flex-1 font-bold">English (EN)</span>
-        <span class="ms text-slate-300">radio_button_unchecked</span>
-      </div>
-      <div onclick="selLang('fr','🇫🇷','Français (FR)')" class="lang-opt border-2 border-slate-200 rounded-2xl px-4 py-4 flex items-center gap-4 cursor-pointer" data-lang="fr">
-        <span class="text-2xl">🇫🇷</span><span class="flex-1 font-bold">Français (FR)</span>
-        <span class="ms text-slate-300">radio_button_unchecked</span>
-      </div>
+    <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <span class="ms text-red-500" style="font-size:32px;font-variation-settings:'FILL' 1;">delete</span>
     </div>
-    <button onclick="closeSheet('sh-idioma')" class="w-full bg-primary text-white font-bold py-4 rounded-2xl active:scale-95">Aplicar Cambios</button>
-  </div>
-</div>
-
-<!-- PROMO 2x1 -->
-<div class="sheet-overlay hidden" id="sh-promo" onclick="if(event.target===this)closeSheet('sh-promo')">
-  <div class="bg-white w-full max-w-[430px] rounded-t-3xl max-h-[85vh] flex flex-col shadow-2xl" onclick="e=>e.stopPropagation()">
-    <div class="px-5 pt-5 pb-3 flex-shrink-0">
-      <div class="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4"></div>
-      <div class="flex items-start justify-between mb-3">
-        <h3 class="font-black text-xl">Promo 2×1 Cervezas</h3>
-        <button onclick="closeSheet('sh-promo')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
-          <span class="ms text-slate-400" style="font-size:20px">close</span>
-        </button>
-      </div>
-      <span class="text-sm font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-500" id="promo-badge">Seleccionados: 0</span>
-    </div>
-    <div class="flex-1 overflow-y-auto hide-scrollbar" id="promo-list"></div>
-    <div class="px-5 pb-safe pt-3 flex-shrink-0">
-      <button id="promo-confirm" onclick="confirmarPromo()" disabled class="w-full bg-primary disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95">
-        Confirmar Selección <span class="ms" style="font-size:20px">check</span>
-      </button>
-    </div>
+    <h3 class="font-black text-xl mb-2">¿Eliminar todos los productos?</h3>
+    <p class="text-slate-400 text-sm mb-6">No podrás deshacer esta acción</p>
+    <button onclick="vaciarPedido()" class="w-full bg-primary text-white font-bold py-4 rounded-2xl mb-3 active:scale-95">Vaciar pedido</button>
+    <button onclick="closeSheet('sh-delete')" class="w-full font-bold py-3 text-slate-700">Mantener pedido</button>
   </div>
 </div>
 
@@ -474,90 +683,98 @@ tailwind.config = {
   </div>
 </div>
 
-<!-- ELIMINAR -->
-<div class="sheet-overlay hidden" id="sh-delete" onclick="if(event.target===this)closeSheet('sh-delete')">
-  <div class="bg-white w-full max-w-[430px] rounded-t-3xl px-6 pt-5 pb-safe text-center shadow-2xl" onclick="e=>e.stopPropagation()">
-    <div class="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5"></div>
-    <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-      <span class="ms text-red-500" style="font-size:32px;font-variation-settings:'FILL' 1;">delete</span>
-    </div>
-    <h3 class="font-black text-xl mb-2">¿Eliminar todos los productos?</h3>
-    <p class="text-slate-400 text-sm mb-6">No podrás deshacer esta acción</p>
-    <button onclick="vaciarPedido()" class="w-full bg-primary text-white font-bold py-4 rounded-2xl mb-3 active:scale-95">Vaciar pedido</button>
-    <button onclick="closeSheet('sh-delete')" class="w-full font-bold py-3 text-slate-700">Mantener pedido</button>
-  </div>
-</div>
+<!-- TOAST -->
+<div class="fixed top-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full text-sm font-semibold z-50 opacity-0 transition-opacity pointer-events-none whitespace-nowrap max-w-[90vw] text-center" id="toast"></div>
 
-<!-- PROCESANDO -->
+<!-- PROCESANDO (Solo para QR en este flujo) -->
 <div class="fixed inset-0 bg-black/70 z-50 items-center justify-center" id="proc-overlay" style="display:none">
   <div class="bg-white rounded-2xl p-8 text-center w-72 shadow-2xl">
     <div class="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
       <span class="ms text-primary animate-spin" style="font-size:32px">autorenew</span>
     </div>
     <h3 class="font-black text-lg text-slate-900" id="proc-msg">Procesando pago...</h3>
-    <p class="text-slate-400 text-sm mt-1" id="proc-sub">No retires la tarjeta</p>
+    <p class="text-slate-400 text-sm mt-1" id="proc-sub">Espere por favor</p>
   </div>
 </div>
-
-<!-- TOAST -->
-<div class="fixed top-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full text-sm font-semibold z-50 opacity-0 transition-opacity pointer-events-none whitespace-nowrap max-w-[90vw] text-center" id="toast"></div>
 
 <script>
 // ══════════════════════════════════════
 // DATOS
 // ══════════════════════════════════════
 const PRODS = [
-  {id:1, cat:'Comida',   name:'Hamburguesa',           price:100, e:'🍔',
-   img:'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80', bg:'#fff7ed'},
-  {id:2, cat:'Cervezas', name:'Cerveza Pacífico Suave',price:120, e:'🍺',
-   img:'https://images.unsplash.com/photo-1608270586620-248524c67de9?w=400&q=80', bg:'#fef9c3', badge:'token'},
-  {id:3, cat:'Bebidas',  name:'Refresco Coca Cola',    price:90,  e:'🥤',
-   img:'https://images.unsplash.com/photo-1629203851122-3726ecdf080e?w=400&q=80', bg:'#fce7f3'},
-  {id:4, cat:'Comida',   name:'Tacos de Carne Asada',  price:80,  e:'🌮',
-   img:'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=400&q=80', bg:'#fef3c7'},
-  {id:5, cat:'Comida',   name:'Pizza de Pepperoni',    price:90,  e:'🍕',
-   img:'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=400&q=80', bg:'#fee2e2'},
+  {id:'hamburguesa', cat:'Comida',   name:'Hamburguesa',           price:100, e:'🍔', img:'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80', bg:'#fff7ed'},
+  {id:'cerveza',     cat:'Cervezas', name:'Cerveza Pacífico Suave',price:120, e:'🍺', img:'https://images.unsplash.com/photo-1608270586620-248524c67de9?w=400&q=80', bg:'#fef9c3', badge:'token'},
+  {id:'coca',        cat:'Bebidas',  name:'Refresco Coca Cola',    price:90,  e:'🥤', img:'https://images.unsplash.com/photo-1629203851122-3726ecdf080e?w=400&q=80', bg:'#fce7f3'},
+  {id:'tacos',       cat:'Comida',   name:'Tacos de Carne Asada',  price:80,  e:'🌮', img:'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=400&q=80', bg:'#fef3c7'},
+  {id:'pizza',       cat:'Comida',   name:'Pizza de Pepperoni',    price:90,  e:'🍕', img:'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=400&q=80', bg:'#fee2e2'}
 ];
-const CATS = ['Todos','Comida','Cervezas','Bebidas'];
-const PROP_PCTS = [0, 5, 10, 15, 20, null];
-const PROMO_ITEMS = [
-  {id:'pl', name:'Lager',  price:8.50, e:'🍺', img:'https://images.unsplash.com/photo-1608270586620-248524c67de9?w=200&q=70', bg:'#fef9c3'},
-  {id:'ps', name:'Stout',  price:9.00, e:'🍺', img:'https://images.unsplash.com/photo-1535958636474-b021ee887b13?w=200&q=70', bg:'#fef3c7'},
-  {id:'pi', name:'IPA Double Dry Hopped Especial', price:9.50, e:'🍺', img:'https://images.unsplash.com/photo-1566740933430-b5e70b06d2d5?w=200&q=70', bg:'#f0fdf4'},
-];
+const CATS = ['Todos', 'Comida', 'Cervezas', 'Bebidas', 'Destilados', 'Snacks'];
+const PROP_PCTS = [0, 10, 15, 20, null];
 
 // ══════════════════════════════════════
 // STATE
 // ══════════════════════════════════════
 let carrito={}, catActiva='Todos', metodoPago='tarjeta';
 let propPct=null, customAmt=0, customStr='';
-let nota='', cuentaNombre='', promoQty={};
-let ordenN=12344, current='s-launch';
+let nota='', currentOrderId='C000V0XX', current='s-launch';
+
+// HISTORIAL
+let totalSalesValue = 0;
+let totalTipsValue = 0;
+let soldItems = {};
+let ordersHistory = [];
 
 // ══════════════════════════════════════
 // INIT
 // ══════════════════════════════════════
-function init(){ renderPills(); renderProds(); }
+function init(){ renderPills(); renderProds(); updateVentasUI(); updateOrdenesUI(); }
 
 // ══════════════════════════════════════
-// NAV
+// NAV Y SIDEBAR
 // ══════════════════════════════════════
+function setActiveLink(id) {
+    document.querySelectorAll('.sidebar-link').forEach(el => {
+        el.className = "sidebar-link flex items-center gap-4 text-slate-500 rounded-xl px-4 py-3 text-sm";
+        el.querySelector('.ms').style.fontVariationSettings = "normal";
+    });
+    const active = document.getElementById(id);
+    if(active) {
+        active.className = "sidebar-link flex items-center gap-4 bg-primary/10 text-primary rounded-xl px-4 py-3 font-semibold text-sm";
+        active.querySelector('.ms').style.fontVariationSettings = "'FILL' 1";
+    }
+}
+
 function goTo(id){
   if(id==='s-pedido'&&getTI()===0) return;
   document.getElementById(current).style.display='none';
   const nxt=document.getElementById(id);
   nxt.style.display='flex';
   current=id;
+
+  if(id==='s-catalogo') setActiveLink('link-vender');
+  if(id==='s-ventas') { setActiveLink('link-ventas'); updateVentasUI(); }
+  if(id==='s-ordenes') { setActiveLink('link-ordenes'); updateOrdenesUI(); }
+
   if(typeof launchTutIfNeeded==='function') launchTutIfNeeded(id);
   if(id==='s-pedido') renderPedido();
   if(id==='s-propina') renderPropina();
   if(id==='s-metodo') document.getElementById('metodo-total').textContent='$'+getTotal().toFixed(2);
   if(id==='s-prop-custom') initCustom();
 }
-function goBack(id){
-  document.getElementById(current).style.display='none';
-  document.getElementById(id).style.display='flex';
-  current=id;
+function goBack(id){ goTo(id); }
+
+function simulateRefresh() {
+    const icons = document.querySelectorAll('.refresh-icon');
+    icons.forEach(icon => icon.classList.add('animate-spin'));
+    showToast('🔄 Catálogo actualizado');
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'});
+    document.querySelectorAll('.sync-time').forEach(el => {
+        el.innerText = `Última sincronización: Hoy ${timeStr}`;
+    });
+
+    setTimeout(() => { icons.forEach(icon => icon.classList.remove('animate-spin')); }, 1200);
 }
 
 // ══════════════════════════════════════
@@ -565,7 +782,7 @@ function goBack(id){
 // ══════════════════════════════════════
 function renderPills(){
   document.getElementById('pills').innerHTML=CATS.map(c=>
-    `<button onclick="selCat('${c}')" class="flex-shrink-0 px-4 py-2 rounded-full text-sm font-bold transition-all ${c===catActiva?'bg-primary text-white':'bg-white border border-slate-200 text-slate-700'}">${c}</button>`
+    `<button onclick="selCat('${c}')" class="flex-shrink-0 px-5 py-2.5 rounded-full text-[15px] font-bold transition-all ${c===catActiva?'bg-primary text-white':'bg-white border border-slate-200 text-[#1e293b] hover:bg-slate-50'}">${c}</button>`
   ).join('');
 }
 function selCat(c){ catActiva=c; renderPills(); renderProds(); }
@@ -574,25 +791,37 @@ function renderProds(){
   const list=catActiva==='Todos'?PRODS:PRODS.filter(p=>p.cat===catActiva);
   document.getElementById('prods-grid').innerHTML=list.map(p=>{
     const qty=carrito[p.id]||0;
-    const imgH=p.img?`<img src="${p.img}" alt="${p.name}" class="w-full h-full object-cover" loading="lazy" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`:''
-    const emojiH=`<div class="w-full h-full flex items-center justify-center text-6xl" style="${p.img?'display:none':''}background:${p.bg}">${p.e}</div>`;
-    const badgeH=p.badge==='token'?`<div class="absolute bottom-0 left-0 right-0 bg-amber-500 text-white text-[10px] font-bold py-1 text-center">🏷 Token</div>`:'';
-    const topRight=qty>0
-      ?`<div class="absolute top-2 right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg">${qty}</div>`
-      :`<div class="absolute top-2 right-2 w-7 h-7 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center text-sm">🤍</div>`;
-    const controls=qty>0
-      ?`<div class="flex items-center gap-2 mt-2">
-          <button onclick="event.stopPropagation();chg(${p.id},-1)" class="w-8 h-8 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center font-bold text-lg text-slate-700 active:scale-90">−</button>
-          <span class="font-bold text-base w-5 text-center">${qty}</span>
-          <button onclick="event.stopPropagation();chg(${p.id},1)" class="w-8 h-8 rounded-full bg-primary flex items-center justify-center font-bold text-lg text-white active:scale-90">+</button>
+    const imgH = p.img ? `<img src="${p.img}" alt="${p.name}" class="w-full h-full object-cover">` : '';
+    const emojiH = p.img ? '' : `<div class="w-full h-full flex items-center justify-center text-6xl" style="background:${p.bg}">${p.e}</div>`;
+    const badgeH = p.badge === 'token' ? `<div class="absolute bottom-0 left-0 right-0 bg-[#f59e0b] text-white text-[11px] font-bold py-1 flex justify-center items-center gap-1"><span class="ms" style="font-size:14px; font-variation-settings:'FILL' 1;">confirmation_number</span> Token</div>` : '';
+    const topRight = qty > 0
+      ? `<div class="absolute top-2 right-2 w-7 h-7 bg-primary rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg">${qty}</div>`
+      : `<div class="absolute top-2 right-2 w-8 h-8 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center text-sm shadow-sm"><span class="ms text-slate-300" style="font-size:18px; font-variation-settings:'FILL' 1;">favorite</span></div>`;
+    
+    const controls = qty > 0
+      ? `<div class="flex items-center justify-between gap-1 w-full mt-2">
+          <button onclick="event.stopPropagation();chg('${p.id}',-1)" class="w-8 h-8 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center font-bold text-lg text-slate-700 active:scale-90">−</button>
+          <span class="font-bold text-base text-center">${qty}</span>
+          <button onclick="event.stopPropagation();chg('${p.id}',1)" class="w-8 h-8 rounded-full bg-primary flex items-center justify-center font-bold text-lg text-white shadow-sm active:scale-90">+</button>
         </div>`
-      :`<button onclick="event.stopPropagation();chg(${p.id},1)" class="absolute bottom-3 right-3 w-9 h-9 bg-primary rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-primary/30 active:scale-90">+</button>`;
-    return `<div class="bg-white rounded-2xl overflow-hidden shadow-sm border-2 ${qty>0?'border-primary':'border-transparent'} transition-all">
-      <div class="aspect-square relative overflow-hidden cursor-pointer" onclick="chg(${p.id},1)">${imgH}${emojiH}${badgeH}${topRight}</div>
-      <div class="p-3 relative">
-        <p class="font-bold text-[13px] leading-tight mb-1">${p.name}</p>
-        <span class="bg-slate-100 text-slate-700 text-[12px] font-semibold px-2 py-0.5 rounded-full">$${p.price.toFixed(2)}</span>
-        ${controls}
+      : `<button onclick="event.stopPropagation();chg('${p.id}',1)" class="w-9 h-9 bg-primary rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-md shadow-primary/30 active:scale-90 flex-shrink-0">+</button>`;
+    
+    return `<div class="bg-white rounded-2xl overflow-hidden shadow-sm border-2 ${qty>0?'border-primary':'border-transparent'} transition-all flex flex-col h-full">
+      <div class="aspect-[4/3] relative overflow-hidden cursor-pointer flex-shrink-0" onclick="chg('${p.id}',1)">
+        ${imgH}${emojiH}${badgeH}${topRight}
+      </div>
+      <div class="p-3 relative flex-1 flex flex-col">
+        <p class="font-bold text-[14px] leading-tight mb-2 text-slate-800">${p.name}</p>
+        ${qty === 0 
+            ? `<div class="flex justify-between items-end mt-auto">
+                 <span class="bg-slate-50 text-slate-600 border border-slate-100 text-[12px] font-semibold px-2.5 py-1 rounded-full">$${p.price.toFixed(2)}</span>
+                 ${controls}
+               </div>`
+            : `<div class="flex flex-col mt-auto">
+                 <span class="bg-slate-50 text-slate-600 border border-slate-100 text-[12px] font-semibold px-2.5 py-1 rounded-full self-start">$${p.price.toFixed(2)}</span>
+                 ${controls}
+               </div>`
+        }
       </div>
     </div>`;
   }).join('');
@@ -605,11 +834,7 @@ function chg(id,d){
   if(d>0){const p=PRODS.find(x=>x.id===id);showToast(`${p.e} ${p.name} agregado`);}
 }
 function getTI(){ return Object.values(carrito).reduce((s,q)=>s+q,0); }
-function getSub(){
-  return Object.entries(carrito).reduce((s,[id,qty])=>{
-    const p=PRODS.find(x=>x.id===+id); return s+(p?p.price*qty:0);
-  },0);
-}
+function getSub(){ return Object.entries(carrito).reduce((s,[id,qty])=>{ const p=PRODS.find(x=>x.id===id); return s+(p?p.price*qty:0); },0); }
 function getPropAmt(){
   if(propPct===null) return 0;
   if(propPct==='custom') return customAmt;
@@ -627,54 +852,42 @@ function updBot(){
 // PEDIDO
 // ══════════════════════════════════════
 function renderPedido(){
-  const stations={};
-  Object.entries(carrito).forEach(([id,qty])=>{
-    const p=PRODS.find(x=>x.id===+id); if(!p) return;
-    const st=p.cat==='Cervezas'?'Bar Principal':'Carl\'s Jr';
-    if(!stations[st]) stations[st]=[];
-    stations[st].push({p,qty});
-  });
-  let h='';
-  Object.entries(stations).forEach(([st,items])=>{
-    const n=items.reduce((s,i)=>s+i.qty,0);
-    h+=`<div class="flex items-center justify-between pt-4 pb-2">
-      <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">${st}</span>
+  const items = Object.entries(carrito).map(([id,qty]) => ({p: PRODS.find(x=>x.id===id), qty}));
+  const n = getTI(), s = getSub();
+  
+  let h=`<div class="flex items-center justify-between pt-4 pb-2">
+      <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Barra Lateral</span>
       <span class="bg-slate-100 text-slate-500 text-xs font-bold px-2 py-0.5 rounded-full">${n} Item${n!==1?'s':''}</span>
     </div>`;
-    items.forEach(({p,qty})=>{
-      const imgH=p.img?`<img src="${p.img}" alt="${p.name}" class="w-full h-full object-cover rounded-xl" loading="lazy">`:`<div class="w-full h-full flex items-center justify-center text-3xl" style="background:${p.bg}">${p.e}</div>`;
-      h+=`<div class="bg-white rounded-2xl p-3.5 mb-2.5 flex gap-3 shadow-sm border border-slate-100">
-        <div class="w-[68px] h-[68px] rounded-xl overflow-hidden flex-shrink-0">${imgH}</div>
-        <div class="flex-1 min-w-0">
-          <div class="flex justify-between items-start gap-2">
-            <p class="font-bold text-[14px] leading-tight flex-1">${p.name}</p>
-            <span class="font-black text-[15px] flex-shrink-0">$${(p.price*qty).toFixed(2)}</span>
-          </div>
-          <p class="text-xs text-slate-400 font-medium mt-1 mb-2">Sin modificadores</p>
-          <div class="flex items-center gap-2">
-            <button onclick="chgP(${p.id},-1)" class="w-8 h-8 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center font-bold text-base active:scale-90">−</button>
-            <span class="font-bold w-5 text-center">${qty}</span>
-            <button onclick="chgP(${p.id},1)" class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-base active:scale-90">+</button>
-          </div>
+    
+  items.forEach(({p,qty})=>{
+    const imgH = p.img ? `<img src="${p.img}" alt="${p.name}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-3xl" style="background:${p.bg}">${p.e}</div>`;
+    h+=`<div class="bg-white rounded-2xl p-3.5 mb-2.5 flex gap-3 shadow-sm border border-slate-100">
+      <div class="w-[68px] h-[68px] rounded-xl overflow-hidden flex-shrink-0">${imgH}</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between items-start gap-2">
+          <p class="font-bold text-[14px] leading-tight flex-1 text-slate-800">${p.name}</p>
+          <span class="font-black text-[15px] flex-shrink-0">$${(p.price*qty).toFixed(2)}</span>
         </div>
-      </div>`;
-    });
+        <p class="text-xs text-slate-400 font-medium mt-1 mb-2">Sin modificadores</p>
+        <div class="flex items-center gap-2">
+          <button onclick="chgP('${p.id}',-1)" class="w-8 h-8 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center font-bold text-base active:scale-90">−</button>
+          <span class="font-bold w-5 text-center">${qty}</span>
+          <button onclick="chgP('${p.id}',1)" class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-base active:scale-90">+</button>
+        </div>
+      </div>
+    </div>`;
   });
+  
   document.getElementById('order-scroll').innerHTML=h;
-  const n=getTI(), s=getSub();
   document.getElementById('pedido-count').textContent=`(${n} artículo${n!==1?'s':''})`;
   document.getElementById('pedido-total').textContent='$'+s.toFixed(2);
-  // nota label
+  
   const nl=document.getElementById('nota-label');
   if(nota){ nl.textContent='✅ '+nota.substring(0,30)+(nota.length>30?'...':''); nl.className='text-sm font-semibold text-primary'; }
   else { nl.textContent='Agregar comentario al pedido...'; nl.className='text-sm text-slate-400'; }
-  if(cuentaNombre) document.getElementById('cuenta-label').textContent=`✅ Cuenta: ${cuentaNombre}`;
 }
-function chgP(id,d){
-  chg(id,d);
-  if(getTI()===0){ goBack('s-catalogo'); return; }
-  renderPedido();
-}
+function chgP(id,d){ chg(id,d); if(getTI()===0){ goBack('s-catalogo'); return; } renderPedido(); }
 
 // ══════════════════════════════════════
 // PROPINA
@@ -685,7 +898,7 @@ function renderPropina(){
   document.getElementById('prop-grid').innerHTML=PROP_PCTS.map(p=>{
     if(p===null) return `<button onclick="goTo('s-prop-custom')" class="prop-btn border-2 ${propPct==='custom'?'border-primary bg-primary/5':'border-slate-200'} rounded-2xl py-4 flex flex-col items-center gap-1 transition-all active:scale-95">
       <span class="ms text-slate-400" style="font-size:22px">edit</span>
-      <span class="text-xs font-bold text-slate-400">Personalizada</span>
+      <span class="text-xs font-bold text-slate-400">Custom</span>
     </button>`;
     const amt=sub*p/100;
     const sel=propPct===p;
@@ -696,11 +909,7 @@ function renderPropina(){
   }).join('');
   updPropDisplay();
 }
-function selProp(p){
-  propPct=p; customAmt=0;
-  renderPropina();
-  document.getElementById('prop-confirm').disabled=false;
-}
+function selProp(p){ propPct=p; customAmt=0; renderPropina(); document.getElementById('prop-confirm').disabled=false; }
 function updPropDisplay(){
   const m=getPropAmt(), t=getSub()+m;
   document.getElementById('prop-monto').textContent='$'+m.toFixed(2);
@@ -708,13 +917,9 @@ function updPropDisplay(){
 }
 
 // ══════════════════════════════════════
-// PROPINA PERSONALIZADA
+// PROPINA CUSTOM
 // ══════════════════════════════════════
-function initCustom(){
-  customStr='';
-  document.getElementById('custom-sub').textContent='$'+getSub().toFixed(2);
-  updCustom();
-}
+function initCustom(){ customStr=''; document.getElementById('custom-sub').textContent='$'+getSub().toFixed(2); updCustom(); }
 function npC(v){
   if(v==='del') customStr=customStr.slice(0,-1);
   else if(v==='.'){ if(customStr.includes('.')) return; customStr+=v; }
@@ -729,11 +934,8 @@ function updCustom(){
   document.getElementById('custom-total').textContent='$'+(sub+amt).toFixed(2);
 }
 function confirmarCustom(){
-  customAmt=parseFloat(customStr)||0;
-  propPct='custom';
-  goBack('s-propina');
-  renderPropina();
-  document.getElementById('prop-confirm').disabled=false;
+  customAmt=parseFloat(customStr)||0; propPct='custom';
+  goBack('s-propina'); renderPropina(); document.getElementById('prop-confirm').disabled=false;
 }
 
 // ══════════════════════════════════════
@@ -748,145 +950,333 @@ function selMetodo(m){
     if(radio) radio.innerHTML=sel?'<div class="w-3 h-3 rounded-full bg-primary"></div>':'';
     if(radio) radio.className=`w-6 h-6 rounded-full border-2 ${sel?'border-primary':'border-slate-300'} flex items-center justify-center`;
   });
-  document.getElementById('ef-info').classList.toggle('hidden',m!=='efectivo');
+}
+
+function procesarPago(){
+    if(metodoPago === 'tarjeta') {
+        document.getElementById('tf-monto').textContent = '$' + getTotal().toFixed(2);
+        goTo('s-tarjeta-flow');
+        setTarjetaState('aproxime');
+    } else if(metodoPago === 'qr') {
+        const qrLbl = document.getElementById('qr-monto-lbl');
+        if (qrLbl) qrLbl.textContent = '$' + getTotal().toFixed(2);
+        goTo('s-qr');
+    }
 }
 
 // ══════════════════════════════════════
-// PAGO
+// ANIMACIÓN FLUJO TARJETA 
 // ══════════════════════════════════════
-function procesarPago(){
+let tfNip = "";
+
+function setTarjetaState(state) {
+    ['tf-fase-aproxime', 'tf-fase-leyendo', 'tf-fase-nip', 'tf-fase-autorizando', 'tf-fase-aprobada', 'tf-modal-retira', 'tf-footer-logos', 'tf-footer-mc', 'tf-numpad-container'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+    });
+    
+    const container = document.getElementById('s-tarjeta-flow');
+
+    if(state === 'aproxime') {
+        container.style.backgroundColor = '#009de0'; // Azul
+        document.getElementById('tf-fase-aproxime').classList.remove('hidden');
+        document.getElementById('tf-footer-logos').classList.remove('hidden');
+    } 
+    else if(state === 'leyendo') {
+        document.getElementById('tf-fase-leyendo').classList.remove('hidden');
+        document.getElementById('tf-footer-logos').classList.remove('hidden');
+        setTimeout(() => setTarjetaState('nip'), 1500);
+    }
+    else if(state === 'nip') {
+        tfNip = "";
+        document.getElementById('tf-nip-display').textContent = "";
+        document.getElementById('tf-fase-nip').classList.remove('hidden');
+        document.getElementById('tf-numpad-container').classList.remove('hidden');
+    }
+    else if(state === 'autorizando') {
+        document.getElementById('tf-fase-autorizando').classList.remove('hidden');
+        document.getElementById('tf-footer-mc').classList.remove('hidden');
+        setTimeout(() => setTarjetaState('retira'), 2000); 
+    }
+    else if(state === 'retira') {
+        document.getElementById('tf-fase-autorizando').classList.remove('hidden'); 
+        document.getElementById('tf-footer-mc').classList.remove('hidden');
+        document.getElementById('tf-modal-retira').classList.remove('hidden');
+        setTimeout(() => setTarjetaState('aprobada'), 2000); 
+    }
+    else if(state === 'aprobada') {
+        container.style.backgroundColor = '#22c55e'; // Verde
+        document.getElementById('tf-fase-aprobada').classList.remove('hidden');
+        document.getElementById('tf-footer-mc').classList.remove('hidden');
+        setTimeout(() => {
+            registrarVenta();
+            mostrarExito();
+        }, 1500);
+    }
+}
+
+function pTFNip(val) {
+    if(val === 'cancel') {
+        goBack('s-metodo');
+    } else if(val === 'clear') {
+        tfNip = tfNip.slice(0, -1);
+    } else {
+        if(tfNip.length < 4) tfNip += val;
+    }
+    document.getElementById('tf-nip-display').textContent = '*'.repeat(tfNip.length);
+}
+
+function tfSubmitNip() {
+    if(tfNip === "0000") {
+        setTarjetaState('autorizando');
+    } else if(tfNip.length > 0) {
+        showToast("⚠️ NIP Incorrecto. Use '0000'");
+        tfNip = "";
+        document.getElementById('tf-nip-display').textContent = "";
+    }
+}
+
+// ══════════════════════════════════════
+// LÓGICA DE CANCELACIÓN DE TARJETA (NUEVA)
+// ══════════════════════════════════════
+function showCancelModal() {
+    document.getElementById('tf-modal-cancel-confirm').classList.remove('hidden');
+}
+
+function hideCancelModal() {
+    document.getElementById('tf-modal-cancel-confirm').classList.add('hidden');
+}
+
+function confirmCancelTransaction() {
+    hideCancelModal();
+    const total = getTotal(), n = getTI();
+    const now = new Date();
+    
+    currentOrderId = 'C' + Math.floor(Math.random() * 900 + 100) + 'V8HB'; 
+    
+    document.getElementById('cancel-order-id').textContent = '#' + currentOrderId;
+    document.getElementById('cancel-total').textContent = '$' + total.toFixed(2);
+    document.getElementById('cancel-qty').textContent = n;
+    
+    const dateStr = now.toLocaleDateString('es-MX', {day: '2-digit', month: 'short'}).replace('.','');
+    const timeStr = now.toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit', hour12: false});
+    document.getElementById('cancel-date').textContent = `${dateStr}. ${timeStr}`;
+
+    goTo('s-cancelado');
+}
+
+function retryCardPayment() {
+    goTo('s-tarjeta-flow');
+    setTarjetaState('aproxime');
+}
+
+function vaciarPedidoFromCancel() {
+    carrito = {}; propPct = null; customAmt = 0; customStr = '';
+    nota = ''; currentOrderId = ''; metodoPago = 'tarjeta';
+    renderProds(); updBot();
+    goTo('s-catalogo');
+    showToast('🗑 Venta cancelada');
+}
+
+// ══════════════════════════════════════
+// QR LÓGICA
+// ══════════════════════════════════════
+function procesarPagoQrExito(){
   const ov=document.getElementById('proc-overlay');
   ov.style.display='flex';
-  const steps=metodoPago==='tarjeta'
-    ?['Leyendo tarjeta...','Comunicando con banco...','Autorizando transacción...','¡Aprobado! ✓']
-    :metodoPago==='qr'?['Verificando QR...','Procesando pago...','¡Aprobado! ✓']
-    :['Registrando efectivo...','¡Listo! ✓'];
+  const steps=['Verificando QR...','Procesando pago...','¡Aprobado! ✓'];
   let i=0;
   const iv=setInterval(()=>{
     document.getElementById('proc-msg').textContent=steps[i++];
-    if(i>=steps.length){ clearInterval(iv); setTimeout(()=>{ ov.style.display='none'; mostrarExito(); },500); }
+    if(i>=steps.length){ clearInterval(iv); setTimeout(()=>{ ov.style.display='none'; registrarVenta(); mostrarExito(); },500); }
   },700);
 }
 
+// ══════════════════════════════════════
+// HISTORIAL Y RESUMENES
+// ══════════════════════════════════════
+function registrarVenta() {
+    let subtotal = 0, totalQty = 0;
+    for (let id in carrito) {
+        soldItems[id] = (soldItems[id] || 0) + carrito[id];
+        const item = PRODS.find(p => p.id === id);
+        subtotal += carrito[id] * item.price;
+        totalQty += carrito[id];
+    }
+    let tipAmount = getPropAmt();
+    
+    totalSalesValue += subtotal;
+    totalTipsValue += tipAmount;
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('es-MX', {day: '2-digit', month: 'short'}).toUpperCase();
+    const timeStr = now.toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit', hour12: false});
+    const fullDate = `${dateStr}. ${timeStr}`;
+
+    currentOrderId = 'C' + Math.floor(Math.random() * 900 + 100) + 'V8HB';
+
+    ordersHistory.unshift({
+        id: currentOrderId,
+        qty: totalQty,
+        total: subtotal + tipAmount,
+        tip: tipAmount,
+        datetime: fullDate
+    });
+}
+
+function updateVentasUI() {
+    document.getElementById('v-total-ventas').textContent = '$' + totalSalesValue.toFixed(2);
+    document.getElementById('v-total-propinas').textContent = '$' + totalTipsValue.toFixed(2);
+
+    const container = document.getElementById('v-items');
+    let hasItems = false;
+    let h = '';
+    for (let id in soldItems) {
+        hasItems = true;
+        let qty = soldItems[id];
+        let item = PRODS.find(p => p.id === id);
+        let lineTotal = qty * item.price;
+
+        h += `
+            <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center">${qty}</div>
+                    <div>
+                        <p class="font-bold text-sm text-slate-800">${item.name}</p>
+                        <p class="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Piezas</p>
+                    </div>
+                </div>
+                <span class="font-bold text-[15px] text-slate-900">$${lineTotal.toFixed(2)}</span>
+            </div>
+        `;
+    }
+    if(!hasItems) h = '<p class="text-center text-sm font-medium text-slate-400 py-6">No hay ventas registradas</p>';
+    h += `<div class="flex justify-between items-center mt-3 pt-3 border-t border-slate-200">
+            <span class="font-black text-slate-800">TOTAL FINAL</span>
+            <span class="bg-primary text-white font-bold text-sm px-3 py-1 rounded-full shadow-sm">$${totalSalesValue.toFixed(2)}</span>
+          </div>`;
+    container.innerHTML = h;
+}
+
+function updateOrdenesUI() {
+    document.getElementById('o-count').textContent = `${ordersHistory.length}/${ordersHistory.length}`;
+    const container = document.getElementById('o-list');
+
+    if(ordersHistory.length === 0) {
+        container.innerHTML = '<p class="text-center text-sm font-medium text-slate-400 py-10">No hay órdenes recientes</p>';
+        return;
+    }
+
+    container.innerHTML = ordersHistory.map(o => `
+        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+            <div class="flex justify-between items-center mb-3">
+                <span class="font-black text-slate-800 text-[15px]">${o.id}</span>
+                <span class="bg-primary text-white font-bold text-sm px-3 py-1 rounded-full shadow-sm">$${o.total.toFixed(2)}</span>
+            </div>
+            <div class="flex justify-between items-center mb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-full bg-primary/10 text-primary font-black text-xs flex items-center justify-center">${o.qty}</div>
+                    <span class="text-[13px] text-slate-600 font-medium">Pieza${o.qty>1?'s':''}</span>
+                </div>
+                <span class="text-[13px] text-slate-500 font-medium">Propina: <span class="text-primary font-bold">$${o.tip.toFixed(2)}</span></span>
+            </div>
+            <div class="flex justify-between items-center pt-3 border-t border-slate-100">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Barra Lateral</span>
+                <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">${o.datetime} <span class="ms text-green-500" style="font-size:16px">done_all</span></span>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ══════════════════════════════════════
+// ÉXITO (RECIBO DINÁMICO)
+// ══════════════════════════════════════
 function mostrarExito(){
-  const total=getTotal(), n=getTI(), orden=++ordenN;
-  const auth=Math.floor(100000+Math.random()*900000);
-  const now=new Date();
-  document.getElementById('exito-tx-num').textContent=`Transacción #${auth}`;
-  document.getElementById('exito-total').textContent='$'+total.toFixed(2);
-  document.getElementById('exito-fecha').textContent=now.toLocaleDateString('es-MX');
-  document.getElementById('exito-hora').textContent=now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
-  // Tags
+  const total = getTotal(), n = getTI();
+  const now = new Date();
+  
+  // Generar Autorización aleatoria
+  const authCode = Math.floor(100000 + Math.random() * 900000); 
+
+  document.getElementById('exito-tx-num').textContent = `Orden #${currentOrderId}`;
+  document.getElementById('exito-total').textContent = '$' + total.toFixed(2);
+  document.getElementById('exito-fecha').textContent = now.toLocaleDateString('es-MX');
+  document.getElementById('exito-hora').textContent = now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+  
   document.getElementById('exito-tags').innerHTML=
-    `<span class="bg-slate-100 rounded-full px-3 py-1 text-sm font-bold flex items-center gap-1">🧾 Orden #${orden}</span>
-     <span class="bg-slate-100 rounded-full px-3 py-1 text-sm font-bold flex items-center gap-1">🛍 ${n} artículo${n!==1?'s':''}</span>`;
-  // Items
-  const sub=getSub(), iva=Math.round(sub*0.16);
-  document.getElementById('exito-items').innerHTML=Object.entries(carrito).map(([id,qty])=>{
-    const p=PRODS.find(x=>x.id===+id);
+    `<span class="bg-slate-100 rounded-full px-3 py-1 text-sm font-bold flex items-center gap-1 text-slate-600">🛍 ${n} artículo${n!==1?'s':''}</span>`;
+  
+  const sub = getSub();
+  document.getElementById('exito-items').innerHTML = Object.entries(carrito).map(([id,qty])=>{
+    const p = PRODS.find(x=>x.id===id);
     return `<div class="flex justify-between text-sm">
       <div class="flex gap-2"><span class="bg-slate-100 text-slate-500 text-xs font-bold rounded px-1.5 py-0.5 h-fit mt-0.5">${qty}x</span><span class="text-slate-600 font-medium">${p.name}</span></div>
       <span class="font-bold">$${(p.price*qty).toFixed(2)}</span>
     </div>`;
   }).join('');
-  // Totals
-  const prop=getPropAmt();
-  let totH=`<div class="flex justify-between text-sm text-slate-500"><span>Subtotal</span><span>$${(sub-iva).toFixed(2)}</span></div>
-    <div class="flex justify-between text-sm text-slate-500"><span>IVA (16%)</span><span>$${iva.toFixed(2)}</span></div>`;
-  if(prop>0) totH+=`<div class="flex justify-between text-sm text-slate-500"><span>Propina (${propPct==='custom'?'personalizada':propPct+'%'})</span><span>$${prop.toFixed(2)}</span></div>`;
-  totH+=`<div class="flex justify-between font-black text-[15px] pt-1 border-t border-dashed border-slate-200"><span>Total</span><span>$${total.toFixed(2)}</span></div>`;
-  document.getElementById('exito-totals').innerHTML=totH;
-  // Method
-  const icons={tarjeta:'credit_card',qr:'qr_code_2',efectivo:'payments'};
-  const labels={tarjeta:'Visa terminada en 4242',qr:'Pago QR verificado',efectivo:'Efectivo recibido'};
-  document.getElementById('exito-method-icon').textContent=icons[metodoPago];
-  document.getElementById('exito-method-label').textContent=labels[metodoPago];
-  document.getElementById('exito-auth-label').textContent=`Auth: ${auth}`;
+  
+  const prop = getPropAmt();
+  const baseSubtotal = sub / 1.16;
+  const iva = sub - baseSubtotal;
+
+  let totH = '';
+  
+  // Desglose: Subtotal, IVA, Propina (Si hay) y Total
+  totH += `<div class="flex justify-between text-[15px] text-slate-500 font-medium mb-1.5"><span>Subtotal</span><span>$${baseSubtotal.toFixed(2)}</span></div>`;
+  totH += `<div class="flex justify-between text-[15px] text-slate-500 font-medium mb-3"><span>IVA (16%)</span><span>$${iva.toFixed(2)}</span></div>`;
+  if (prop > 0) {
+      totH += `<div class="flex justify-between text-[15px] text-slate-500 font-medium mb-3"><span>Propina</span><span>$${prop.toFixed(2)}</span></div>`;
+  }
+  totH += `<div class="flex justify-between font-black text-[18px] text-slate-900 pt-4 border-t border-dashed border-slate-200 mb-5"><span>Total</span><span>$${total.toFixed(2)}</span></div>`;
+
+  // UI Condicional según Método de Pago
+  if (metodoPago === 'tarjeta') {
+      totH += `
+      <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-xl bg-[#fce4f3] flex items-center justify-center flex-shrink-0">
+              <span class="ms text-primary" style="font-variation-settings:'FILL' 1; font-size:20px">credit_card</span>
+          </div>
+          <div class="flex-1">
+              <p class="text-[15px] font-bold text-[#1e293b] leading-tight">Mastercard terminada en 4242</p>
+              <p class="text-[14px] text-[#94a3b8] mt-0.5">Auth: ${authCode}</p>
+          </div>
+          <div class="w-6 h-6 rounded-full bg-[#10b981] flex items-center justify-center flex-shrink-0">
+              <span class="ms text-white" style="font-size:16px; font-weight:bold;">check</span>
+          </div>
+      </div>`;
+  } else {
+      totH += `
+      <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col gap-2.5">
+          <div class="flex justify-between text-[11px] uppercase tracking-wider font-bold text-slate-400"><span>Saldo anterior</span><span>$0.00</span></div>
+          <div class="flex justify-between text-[11px] uppercase tracking-wider font-bold text-slate-400"><span>Saldo actual</span><span>$0.00</span></div>
+          <div class="flex justify-between items-center mt-1 pt-2.5 border-t border-slate-200">
+             <span class="text-xs font-bold text-slate-600">Tipo de Pago</span>
+             <span class="ms text-slate-700" style="font-variation-settings:'FILL' 1; font-size:20px">qr_code_2</span>
+          </div>
+      </div>`;
+  }
+  
+  document.getElementById('exito-totals-box').innerHTML = totH;
   goTo('s-exito');
 }
 
 function nuevaVenta(){
   carrito={}; propPct=null; customAmt=0; customStr='';
-  nota=''; cuentaNombre=''; metodoPago='tarjeta'; promoQty={};
+  nota=''; currentOrderId=''; metodoPago='tarjeta';
   document.getElementById('nota-label').textContent='Agregar comentario al pedido...';
-  document.getElementById('cuenta-label').textContent='Agregar a Cuenta';
   document.getElementById('nota-ta').value='';
   document.getElementById('nota-cnt').textContent='0/150';
-  document.getElementById('cuenta-input').value='';
   renderProds(); updBot();
-  ['s-pedido','s-propina','s-prop-custom','s-metodo','s-cuenta','s-exito','s-launch'].forEach(id=>{
-    document.getElementById(id).style.display='none';
-  });
-  document.getElementById('s-catalogo').style.display='flex';
-  current='s-catalogo';
+  goTo('s-catalogo');
 }
 
 // ══════════════════════════════════════
-// CUENTA
-// ══════════════════════════════════════
-function guardarCuenta(){
-  const v=document.getElementById('cuenta-input').value.trim();
-  if(!v){ showToast('⚠️ Escribe un nombre'); return; }
-  cuentaNombre=v;
-  goBack('s-pedido');
-  renderPedido();
-  showToast(`✅ Cuenta "${v}" asignada`);
-}
-
-// ══════════════════════════════════════
-// SHEETS
+// HERRAMIENTAS ADICIONALES
 // ══════════════════════════════════════
 function openSheet(id){
-  if(id==='sh-promo') renderPromo();
   if(id==='sh-nota'){ document.getElementById('nota-ta').value=nota; document.getElementById('nota-cnt').textContent=nota.length+'/150'; }
   document.getElementById(id).classList.remove('hidden');
 }
 function closeSheet(id){ document.getElementById(id).classList.add('hidden'); }
-
-function selLang(code,flag,name){
-  document.querySelectorAll('.lang-opt').forEach(el=>{
-    const sel=el.dataset.lang===code;
-    el.className=`lang-opt border-2 ${sel?'border-primary':'border-slate-200'} rounded-2xl px-4 py-4 flex items-center gap-4 cursor-pointer`;
-    el.querySelector('.ms').textContent=sel?'radio_button_checked':'radio_button_unchecked';
-    el.querySelector('.ms').className=`ms ${sel?'text-primary':'text-slate-300'}`;
-  });
-  document.getElementById('lang-btn').textContent=flag;
-  showToast(`🌐 Idioma: ${code.toUpperCase()} (simulación)`);
-}
-
-function renderPromo(){
-  const total=Object.values(promoQty).reduce((s,q)=>s+q,0);
-  const badge=document.getElementById('promo-badge');
-  badge.textContent=`Seleccionados: ${total}`;
-  badge.className=`text-sm font-bold px-3 py-1 rounded-full ${total>0?'bg-primary/10 text-primary':'bg-slate-100 text-slate-500'}`;
-  document.getElementById('promo-list').innerHTML=PROMO_ITEMS.map(item=>{
-    const qty=promoQty[item.id]||0;
-    const imgH=`<img src="${item.img}" alt="${item.name}" class="w-full h-full object-cover rounded-xl" loading="lazy">`;
-    return `<div class="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 ${qty>0?'bg-primary/5':''}">
-      <div class="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">${imgH}</div>
-      <div class="flex-1">
-        <p class="font-bold text-[14px]">${item.name}</p>
-        <span class="bg-slate-100 ${qty>0?'bg-primary/10 text-primary':''} text-[12px] font-semibold px-2 py-0.5 rounded-full">$${item.price.toFixed(2)}</span>
-      </div>
-      ${qty>0?`<div class="flex items-center gap-2">
-        <button onclick="chgPromo('${item.id}',-1)" class="w-8 h-8 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center font-bold active:scale-90">−</button>
-        <span class="font-bold w-5 text-center">${qty}</span>
-        <button onclick="chgPromo('${item.id}',1)" class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold active:scale-90">+</button>
-      </div>`:`<button onclick="chgPromo('${item.id}',1)" class="w-9 h-9 bg-primary rounded-full flex items-center justify-center text-white font-bold text-xl active:scale-90">+</button>`}
-    </div>`;
-  }).join('');
-  document.getElementById('promo-confirm').disabled=total===0;
-}
-function chgPromo(id,d){
-  const n=(promoQty[id]||0)+d;
-  if(n<=0) delete promoQty[id]; else promoQty[id]=n;
-  renderPromo();
-}
-function confirmarPromo(){
-  const t=Object.values(promoQty).reduce((s,q)=>s+q,0);
-  showToast(`🍺 ${t} cerveza${t!==1?'s':''} de promo agregada${t!==1?'s':''}`);
-  closeSheet('sh-promo');
-}
 
 function guardarNota(){
   nota=document.getElementById('nota-ta').value.trim();
@@ -896,16 +1286,11 @@ function guardarNota(){
 }
 
 function vaciarPedido(){
-  carrito={}; promoQty={};
-  renderProds(); updBot();
-  closeSheet('sh-delete');
+  carrito={}; renderProds(); updBot(); closeSheet('sh-delete');
   if(current==='s-pedido') goBack('s-catalogo');
   showToast('🗑 Pedido vaciado');
 }
 
-// ══════════════════════════════════════
-// TOAST
-// ══════════════════════════════════════
 function showToast(msg){
   const t=document.getElementById('toast');
   t.textContent=msg; t.style.opacity='1';
@@ -914,37 +1299,50 @@ function showToast(msg){
 
 init();
 
-// Auto-lanzar tutorial al cargar la app
-window.addEventListener('load', function() {
-  // Esperar a que todo esté listo
-  setTimeout(function() {
-    if (typeof tutInit === 'function') {
-      // Ir al catálogo primero si estamos en launch
-      if (current === 's-launch') {
-        // No mover - esperar que el usuario toque "Iniciar"
-        // pero modificar el botón para lanzar tutorial después
-      }
+// Tutorial handling
+window.addEventListener('load', function() { setTimeout(function() { if (current === 's-launch') {} }, 300); });
+let _tutLaunched = false;
+function launchTutIfNeeded(id) {
+  if (id === 's-catalogo' && !_tutLaunched) {
+    _tutLaunched = true;
+    setTimeout(function() { if (typeof tutInit === 'function') tutInit(); }, 400);
+  }
+}
+
+// ══════════════════════════════════════
+// SCROLL HORIZONTAL CON MOUSE (ESCRITORIO)
+// ══════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+    const catBar = document.getElementById('categories-bar');
+    if (catBar) {
+        let isDownCat = false, startXCat, scrollLeftCat;
+
+        catBar.addEventListener('mousedown', (e) => {
+            isDownCat = true;
+            catBar.style.cursor = 'grabbing';
+            startXCat = e.pageX - catBar.offsetLeft;
+            scrollLeftCat = catBar.scrollLeft;
+        });
+        catBar.addEventListener('mouseleave', () => { isDownCat = false; catBar.style.cursor = 'grab'; });
+        catBar.addEventListener('mouseup', () => { isDownCat = false; catBar.style.cursor = 'grab'; });
+        catBar.addEventListener('mousemove', (e) => {
+            if (!isDownCat) return;
+            e.preventDefault();
+            const x = e.pageX - catBar.offsetLeft;
+            const walk = (x - startXCat) * 2; 
+            catBar.scrollLeft = scrollLeftCat - walk;
+        });
     }
-  }, 300);
 });
 </script>
 
-
-<!-- ══════════ TUTORIAL PANTALLA POR PANTALLA ══════════ -->
+<!-- ══════════ TUTORIAL ══════════ -->
 <div id="tut-wrap" style="display:none;position:fixed;inset:0;z-index:99999;top:0;left:0;right:0;bottom:0">
-
-  <!-- Fondo oscuro clickeable para cerrar -->
   <div onclick="tutSkip()" style="position:absolute;inset:0;background:rgba(0,0,0,0.65)"></div>
-
-  <!-- Tarjeta del tutorial -->
   <div id="tut-card" style="position:absolute;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:398px;background:#fff;border-radius:24px;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);z-index:2;transition:top 0.3s ease,bottom 0.3s ease">
-
-    <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:36px;height:36px;background:#E6006B;border-radius:50%;display:flex;align-items:center;justify-content:center">
-          <span id="tut-emoji" style="font-size:18px">🎓</span>
-        </div>
+        <div style="width:36px;height:36px;background:#E6006B;border-radius:50%;display:flex;align-items:center;justify-content:center"><span id="tut-emoji" style="font-size:18px">🎓</span></div>
         <div>
           <p id="tut-step-lbl" style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;margin:0">PASO 1 DE 6</p>
           <h3 id="tut-title" style="font-size:16px;font-weight:800;color:#111827;margin:0;line-height:1.2"></h3>
@@ -952,229 +1350,20 @@ window.addEventListener('load', function() {
       </div>
       <button onclick="tutSkip()" style="width:32px;height:32px;border-radius:50%;background:#f3f4f6;border:none;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#9ca3af">✕</button>
     </div>
-
-    <!-- Imagen / ilustración del paso -->
     <div id="tut-img-wrap" style="background:#f9fafb;border-radius:16px;padding:16px;margin-bottom:14px;text-align:center">
       <div id="tut-illustration" style="font-size:48px;margin-bottom:8px"></div>
       <div id="tut-highlight" style="background:#E6006B;color:#fff;border-radius:12px;padding:8px 14px;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700"></div>
     </div>
-
-    <!-- Descripción -->
     <p id="tut-desc" style="font-size:14px;color:#4b5563;line-height:1.6;margin-bottom:16px"></p>
-
-    <!-- Tips -->
-    <div id="tut-tips" style="background:#fce4f3;border-radius:12px;padding:10px 14px;margin-bottom:16px;display:none">
-      <p id="tut-tips-text" style="font-size:12px;color:#9f1239;font-weight:600;margin:0"></p>
-    </div>
-
-    <!-- Dots -->
+    <div id="tut-tips" style="background:#fce4f3;border-radius:12px;padding:10px 14px;margin-bottom:16px;display:none"><p id="tut-tips-text" style="font-size:12px;color:#9f1239;font-weight:600;margin:0"></p></div>
     <div style="display:flex;gap:5px;justify-content:center;margin-bottom:16px" id="tut-dots"></div>
-
-    <!-- Botones -->
     <div style="display:flex;gap:10px">
-      <button onclick="tutSkip()" style="flex:1;background:#f3f4f6;color:#6b7280;border:none;border-radius:14px;padding:13px;font-size:14px;font-weight:600;cursor:pointer">Saltar todo</button>
+      <button onclick="tutSkip()" style="flex:1;background:#f3f4f6;color:#6b7280;border:none;border-radius:14px;padding:13px;font-size:14px;font-weight:600;cursor:pointer">Saltar</button>
       <button id="tut-btn" onclick="tutNext()" style="flex:2;background:#E6006B;color:#fff;border:none;border-radius:14px;padding:13px;font-size:15px;font-weight:700;cursor:pointer">Siguiente →</button>
     </div>
   </div>
-
-  <!-- Flecha indicadora animada -->
   <div id="tut-pointer" style="display:none;position:absolute;font-size:32px;animation:bounce 0.8s infinite alternate;z-index:3">👆</div>
 </div>
-
-<style>
-  @keyframes bounce { from{transform:translateY(0)} to{transform:translateY(-10px)} }
-  @keyframes pulse-ring { 0%{transform:scale(1);opacity:1} 100%{transform:scale(1.6);opacity:0} }
-  .tut-pulse { animation: pulse-ring 1s infinite; }
-</style>
-
-<script>
-const TUTORIAL_STEPS = [
-  {
-    screen: 's-launch',
-    emoji: '🎓',
-    title: 'Bienvenido al Simulador',
-    illustration: '📱',
-    highlight: '⚡ Modo Entrenamiento Activo',
-    desc: 'Este simulador replica exactamente la app YoshiCash que usarás en el evento. Practica todas las funciones sin miedo — ningún cobro es real.',
-    tips: '💡 Puedes practicar cuantas veces quieras antes del evento.',
-    pos: 'center',
-    pointer: null,
-  },
-  {
-    screen: 's-catalogo',
-    emoji: '🛒',
-    title: 'Catálogo de Productos',
-    illustration: '🍔🍺🌮',
-    highlight: '👆 Toca la imagen para agregar',
-    desc: 'Aquí verás todos los productos disponibles. Toca la foto de cualquier producto para agregarlo al pedido. El botón rosado "+" también funciona.',
-    tips: '💡 El número rosa en la esquina indica cuántas unidades llevas de ese producto.',
-    pos: 'top',
-    pointer: '#prods-grid',
-  },
-  {
-    screen: 's-catalogo',
-    emoji: '🔢',
-    title: 'Controles de Cantidad',
-    illustration: '➖  1  ➕',
-    highlight: '− para quitar · + para agregar',
-    desc: 'Una vez que agregas un producto, aparecen los botones − y +. Toca − para quitar una unidad y + para agregar más. También puedes tocar la imagen directamente para sumar.',
-    tips: '💡 Si bajas la cantidad a 0, el producto desaparece del pedido automáticamente.',
-    pos: 'top',
-    pointer: null,
-  },
-  {
-    screen: 's-catalogo',
-    emoji: '💰',
-    title: 'Barra de Total',
-    illustration: '🧾',
-    highlight: 'Total · Continuar →',
-    desc: 'En la parte inferior siempre verás el total acumulado y cuántos items llevas. Cuando estés listo, toca "Continuar" para pasar al resumen del pedido.',
-    tips: '💡 El botón "Continuar" solo se activa cuando tienes al menos un producto.',
-    pos: 'bottom',
-    pointer: '#bot-bar',
-  },
-  {
-    screen: 's-catalogo',
-    emoji: '📋',
-    title: 'Flujo Completo de Venta',
-    illustration: '1️⃣ → 2️⃣ → 3️⃣ → 4️⃣ → ✅',
-    highlight: 'Catálogo → Pedido → Propina → Pago → Éxito',
-    desc: 'El proceso completo tiene 5 pasos:
-1. Agrega productos al carrito
-2. Revisa el pedido
-3. Selecciona propina
-4. Elige método de pago
-5. ¡Pago exitoso!',
-    tips: '💡 Practica el flujo completo varias veces para memorizarlo.',
-    pos: 'center',
-    pointer: null,
-  },
-  {
-    screen: 's-catalogo',
-    emoji: '🚀',
-    title: '¡Listo para practicar!',
-    illustration: '🎉',
-    highlight: '¡Ya conoces el sistema!',
-    desc: 'Ya sabes cómo funciona el simulador. Ahora practica el flujo completo. Recuerda: puedes volver a ver este tutorial tocando el botón ❓ en el menú.',
-    tips: null,
-    pos: 'center',
-    pointer: null,
-    isLast: true,
-  },
-];
-
-let tutStep = 0;
-let tutVisible = false;
-
-function tutInit() {
-  // Tutorial siempre activo en modo entrenamiento
-  tutVisible = true;
-  tutShow(0);
-}
-
-function tutShow(step) {
-  tutStep = step;
-  const s = TUTORIAL_STEPS[step];
-  const wrap = document.getElementById('tut-wrap');
-  const card = document.getElementById('tut-card');
-
-  wrap.style.display = 'block';
-
-  // Si el paso requiere otra pantalla, navegar a ella
-  if (s.screen && s.screen !== current) {
-    // Solo para s-catalogo - asegurar que estamos ahí
-  }
-
-  // Llenar contenido
-  document.getElementById('tut-emoji').textContent = s.emoji;
-  document.getElementById('tut-step-lbl').textContent = `PASO ${step+1} DE ${TUTORIAL_STEPS.length}`;
-  document.getElementById('tut-title').textContent = s.title;
-  document.getElementById('tut-illustration').textContent = s.illustration;
-  document.getElementById('tut-highlight').textContent = s.highlight;
-  document.getElementById('tut-desc').textContent = s.desc;
-
-  // Tips
-  const tipsEl = document.getElementById('tut-tips');
-  const tipsText = document.getElementById('tut-tips-text');
-  if (s.tips) {
-    tipsEl.style.display = 'block';
-    tipsText.textContent = s.tips;
-  } else {
-    tipsEl.style.display = 'none';
-  }
-
-  // Botón final
-  document.getElementById('tut-btn').textContent = s.isLast ? '¡Empezar ahora! 🚀' : 'Siguiente →';
-
-  // Dots
-  document.getElementById('tut-dots').innerHTML = TUTORIAL_STEPS.map((_, i) =>
-    `<div style="width:${i===step?'22px':'8px'};height:8px;border-radius:10px;background:${i===step?'#E6006B':'#e5e7eb'};transition:all 0.3s"></div>`
-  ).join('');
-
-  // Posicionar tarjeta
-  if (s.pos === 'bottom') {
-    card.style.bottom = '140px';
-    card.style.top = 'auto';
-  } else if (s.pos === 'top') {
-    card.style.top = '140px';
-    card.style.bottom = 'auto';
-  } else {
-    card.style.top = '50%';
-    card.style.transform = 'translateX(-50%) translateY(-50%)';
-    card.style.bottom = 'auto';
-  }
-
-  // Pointer
-  const ptr = document.getElementById('tut-pointer');
-  if (s.pointer) {
-    const el = document.querySelector(s.pointer);
-    if (el) {
-      const r = el.getBoundingClientRect();
-      ptr.style.display = 'block';
-      ptr.style.left = (r.left + r.width/2 - 16) + 'px';
-      ptr.style.top = s.pos === 'bottom'
-        ? (r.top - 50) + 'px'
-        : (r.top + r.height + 8) + 'px';
-    }
-  } else {
-    ptr.style.display = 'none';
-  }
-}
-
-function tutNext() {
-  if (tutStep >= TUTORIAL_STEPS.length - 1) {
-    tutSkip();
-    return;
-  }
-  // Reset transform para pasos no-center
-  const card = document.getElementById('tut-card');
-  card.style.transform = 'translateX(-50%)';
-  tutShow(tutStep + 1);
-}
-
-function tutSkip() {
-  document.getElementById('tut-wrap').style.display = 'none';
-  tutVisible = false;
-  // No guardar - el tutorial aparece siempre al iniciar
-}
-
-function tutReset() {
-  // reset
-  tutStep = 0;
-  tutShow(0);
-}
-
-// El tutorial se lanza desde goTo - se inyecta via patch en la función original
-let _tutLaunched = false;
-function launchTutIfNeeded(id) {
-  if (id === 's-catalogo' && !_tutLaunched) {
-    _tutLaunched = true;
-    setTimeout(function() {
-      if (typeof tutInit === 'function') tutInit();
-    }, 400);
-  }
-}
-</script>
 
 </body>
 </html>
