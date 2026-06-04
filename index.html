@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8"/>
@@ -23,11 +24,15 @@ tailwind.config = {
       animation: {
         'ping-slow': 'ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite',
         'slide-up': 'slideUp 0.4s ease-out forwards',
+        'blink': 'blink 1s step-end infinite'
       },
       keyframes: {
         slideUp: {
           '0%': { transform: 'translateY(100px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        blink: {
+          '50%': { opacity: '0' }
         }
       }
     },
@@ -41,10 +46,8 @@ tailwind.config = {
   .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
   .screen { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: #F9FAFB; height: 100%; }
   .screen-hidden { display: none !important; }
-  /* Scroll areas */
   .scroll-area { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 20px; }
   .scroll-area::-webkit-scrollbar { display: none; }
-  /* Bottom bars - always visible */
   .bottom-bar-fixed { flex-shrink: 0; background: #fff; border-top: 1px solid #f1f5f9; padding: 12px 16px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
   .ms { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased; }
   .receipt-edge { background: linear-gradient(135deg, transparent 5px, #fff 5px) top left, linear-gradient(225deg, transparent 5px, #fff 5px) top right; background-size: 14px 14px; background-repeat: repeat-x; height: 10px; }
@@ -181,7 +184,10 @@ tailwind.config = {
   <div class="scroll-area px-4 py-6">
     <p class="text-center text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">SUBTOTAL A PAGAR</p>
     <p class="text-center text-5xl font-black tracking-tight mb-2" id="prop-sub">$0.00</p>
-    <p class="text-center text-primary font-semibold text-sm mb-8 cursor-pointer">Dividir pago</p>
+    
+    <!-- LINK PARA DIVIDIR PAGO -->
+    <p class="text-center text-primary font-bold text-sm mb-8 cursor-pointer active:opacity-70 transition-opacity" onclick="iniciarSplit()">Dividir pago</p>
+    
     <div class="grid grid-cols-3 gap-3 mb-5" id="prop-grid"></div>
     <div class="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 flex items-center justify-between">
       <span class="text-slate-500 font-medium">Monto Propina</span>
@@ -223,7 +229,7 @@ tailwind.config = {
       Confirmar Propina <span class="ms" style="font-size:20px">check</span>
     </button>
   </div>
-  <!-- Numpad Custom Propina -->
+  <!-- Numpad -->
   <div class="grid grid-cols-3 border-t border-slate-100 flex-shrink-0">
     <button onclick="npC('1')" class="py-5 text-2xl font-bold border-r border-b border-slate-100 active:bg-slate-50">1</button>
     <button onclick="npC('2')" class="py-5 text-2xl font-bold border-r border-b border-slate-100 active:bg-slate-50">2</button>
@@ -237,6 +243,80 @@ tailwind.config = {
     <button onclick="npC('.')" class="py-5 text-2xl font-bold border-r border-slate-100 active:bg-slate-50">.</button>
     <button onclick="npC('0')" class="py-5 text-2xl font-bold border-r border-slate-100 active:bg-slate-50">0</button>
     <button onclick="npC('del')" class="py-5 flex items-center justify-center active:bg-slate-50"><span class="ms text-primary">backspace</span></button>
+  </div>
+</div>
+
+<!-- ══════════════════ DIVIDIR CUENTA (NUEVO PANTALLA) ══════════════════ -->
+<div class="screen" id="s-dividir-cuenta" style="display:none;background:#fff">
+  <div class="bg-surface px-4 py-4 border-b border-slate-100 flex items-center gap-3 flex-shrink-0">
+    <button onclick="goBack('s-propina')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100" id="btn-back-split">
+      <span class="ms text-slate-700">arrow_back</span>
+    </button>
+    <h2 class="flex-1 text-center font-black text-[17px]">Dividir Cuenta</h2>
+    <div class="w-9"></div>
+  </div>
+
+  <div class="scroll-area flex flex-col items-center px-6 pt-6 pb-2">
+    <!-- Variante 1: Primer cobro (Sin pago previo) -->
+    <div id="split-info-initial" class="w-full text-center mb-6">
+        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1">TOTAL DEL PEDIDO</p>
+        <p class="text-[32px] font-black tracking-tight text-[#0f172a]" id="split-total-lbl">$0.00</p>
+    </div>
+    
+    <!-- Variante 2: Cobros subsecuentes (Con pago previo) -->
+    <div id="split-info-ongoing" class="w-full text-center mb-6 hidden">
+        <div class="flex justify-between items-center mb-1">
+            <span class="text-[12px] font-bold text-slate-500 uppercase tracking-widest">TOTAL DEL PEDIDO</span>
+            <span class="font-bold text-slate-700 text-[14px]" id="split-total-orig-lbl">$0.00</span>
+        </div>
+        <div class="flex justify-between items-center mb-4">
+            <span class="text-[12px] font-bold text-slate-500 uppercase tracking-widest">YA PAGADO</span>
+            <span class="font-bold text-emerald-500 text-[14px]" id="split-paid-lbl">$0.00</span>
+        </div>
+        <div class="flex justify-between items-center mt-2">
+            <span class="text-[13px] font-black text-slate-900 uppercase tracking-widest">SALDO PENDIENTE</span>
+            <span class="font-black text-[22px] text-slate-900 tracking-tight" id="split-pending-lbl">$0.00</span>
+        </div>
+    </div>
+
+    <!-- Botones Rápidos -->
+    <div class="flex gap-3 mb-8 justify-center w-full" id="split-quick-btns">
+        <!-- Inyectados por JS -->
+    </div>
+
+    <!-- Monto a Pagar Ahora -->
+    <p class="text-[13px] font-bold text-slate-500 mb-1">Monto a pagar ahora</p>
+    <div class="text-[54px] font-black tracking-tight text-[#0f172a] mb-5 flex items-center justify-center relative">
+        <span class="text-slate-300 text-[40px] mr-1 font-bold">$</span>
+        <span id="split-current-display">0.00</span>
+        <div class="w-[3px] h-[50px] bg-primary animate-blink ml-1 rounded-full"></div>
+    </div>
+
+    <!-- Saldo Restante -->
+    <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center w-full mb-4">
+        <span class="text-[14px] text-slate-500 font-medium">Saldo restante</span>
+        <span class="font-bold text-[16px] text-slate-900" id="split-remaining-lbl">$0.00</span>
+    </div>
+    
+    <button id="btn-split-continue" onclick="confirmarSplit()" disabled class="w-full bg-primary disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all">
+      Continuar al Pago
+    </button>
+  </div>
+
+  <!-- Numpad Split -->
+  <div class="grid grid-cols-3 border-t border-slate-100 flex-shrink-0 mt-auto bg-white">
+    <button onclick="npSplit('1')" class="py-4 text-[22px] font-bold border-r border-b border-slate-100 active:bg-slate-50">1</button>
+    <button onclick="npSplit('2')" class="py-4 text-[22px] font-bold border-r border-b border-slate-100 active:bg-slate-50">2</button>
+    <button onclick="npSplit('3')" class="py-4 text-[22px] font-bold border-b border-slate-100 active:bg-slate-50">3</button>
+    <button onclick="npSplit('4')" class="py-4 text-[22px] font-bold border-r border-b border-slate-100 active:bg-slate-50">4</button>
+    <button onclick="npSplit('5')" class="py-4 text-[22px] font-bold border-r border-b border-slate-100 active:bg-slate-50">5</button>
+    <button onclick="npSplit('6')" class="py-4 text-[22px] font-bold border-b border-slate-100 active:bg-slate-50">6</button>
+    <button onclick="npSplit('7')" class="py-4 text-[22px] font-bold border-r border-b border-slate-100 active:bg-slate-50">7</button>
+    <button onclick="npSplit('8')" class="py-4 text-[22px] font-bold border-r border-b border-slate-100 active:bg-slate-50">8</button>
+    <button onclick="npSplit('9')" class="py-4 text-[22px] font-bold border-b border-slate-100 active:bg-slate-50">9</button>
+    <button onclick="npSplit('.')" class="py-4 text-[22px] font-bold border-r border-slate-100 active:bg-slate-50">.</button>
+    <button onclick="npSplit('0')" class="py-4 text-[22px] font-bold border-r border-slate-100 active:bg-slate-50">0</button>
+    <button onclick="npSplit('del')" class="py-4 flex items-center justify-center active:bg-slate-50"><span class="ms text-slate-800" style="font-size:28px">backspace</span></button>
   </div>
 </div>
 
@@ -361,7 +441,7 @@ tailwind.config = {
         </div>
     </div>
 
-    <!-- MODAL CONFIRMAR CANCELACIÓN (NUEVO) -->
+    <!-- MODAL CONFIRMAR CANCELACIÓN -->
     <div id="tf-modal-cancel-confirm" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
         <div class="bg-[#d2e3fc] rounded-2xl p-6 flex flex-col items-center shadow-2xl w-72 animate-slide-up text-[#1e3a8a]">
             <p class="text-center text-[18px] leading-snug mb-6 font-medium">¿Está seguro de que<br>quiere cancelar la<br>transacción?</p>
@@ -410,8 +490,6 @@ tailwind.config = {
 
 <!-- ══════════════════ ESCANER QR ══════════════════ -->
 <div class="screen" id="s-qr" style="display:none;background:#000">
-  
-  <!-- Cabecera transparente -->
   <div class="px-4 py-4 flex items-center gap-3 flex-shrink-0 z-20 relative">
     <button onclick="goBack('s-metodo')" class="w-10 h-10 flex items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors backdrop-blur-md">
       <span class="ms">arrow_back</span>
@@ -419,30 +497,22 @@ tailwind.config = {
     <h2 class="flex-1 text-center font-bold text-[18px] text-white tracking-wide pr-10">Escanear QR</h2>
   </div>
   
-  <!-- Área interactiva para simular escaneo -->
   <div class="flex-1 flex flex-col items-center relative z-10 w-full cursor-pointer" onclick="procesarPagoQrExito()" title="Haz clic en la cámara para simular escaneo">
-    
-    <!-- Píldora de instrucción -->
     <div class="mt-4 mb-auto bg-black/60 backdrop-blur-md rounded-[30px] px-6 py-4 text-center">
        <p class="text-white text-[16px] font-medium leading-snug">Escanea el código QR del<br>cliente</p>
     </div>
 
-    <!-- Marco del escáner -->
     <div class="relative w-[260px] h-[260px] mb-auto">
-      <!-- Esquinas blancas -->
       <div class="absolute top-0 left-0 w-10 h-10 border-t-[4px] border-l-[4px] border-white rounded-tl-[16px]"></div>
       <div class="absolute top-0 right-0 w-10 h-10 border-t-[4px] border-r-[4px] border-white rounded-tr-[16px]"></div>
       <div class="absolute bottom-0 left-0 w-10 h-10 border-b-[4px] border-l-[4px] border-white rounded-bl-[16px]"></div>
       <div class="absolute bottom-0 right-0 w-10 h-10 border-b-[4px] border-r-[4px] border-white rounded-br-[16px]"></div>
       
-      <!-- Láser animado -->
       <div class="absolute left-2 right-2 h-[2px] bg-[#E6006B] shadow-[0_0_15px_#E6006B]" style="animation: scanline 2s ease-in-out infinite alternate;">
-         <!-- Puntito brillante en el centro del láser -->
          <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_5px_#fff]"></div>
       </div>
     </div>
     
-    <!-- Botón linterna flotante -->
     <div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-20">
       <button class="w-[60px] h-[60px] bg-[#E6006B] rounded-full flex items-center justify-center text-white shadow-[0_0_20px_rgba(230,0,107,0.6)] active:scale-95 transition-transform" onclick="event.stopPropagation(); showToast('Linterna activada');">
         <span class="ms" style="font-size:28px; font-variation-settings:'FILL' 1;">flashlight_on</span>
@@ -474,7 +544,7 @@ tailwind.config = {
     <div class="relative w-full max-w-sm mx-auto shadow-xl">
       <div class="bg-white rounded-t-2xl px-6 pt-6 pb-3">
         <div class="text-center mb-6">
-          <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Pagado</p>
+          <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1" id="exito-total-lbl">Total Pagado</p>
           <p class="text-5xl font-black tracking-tighter" id="exito-total">$0.00</p>
         </div>
         <div class="flex gap-2 justify-center mb-5" id="exito-tags"></div>
@@ -495,19 +565,13 @@ tailwind.config = {
     </div>
   </div>
   <!-- Bottom actions -->
-  <div class="bottom-bar-fixed">
-    <button onclick="showToast('🖨️ Imprimiendo ticket...')" class="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 mb-3 active:scale-95">
-      <span class="ms" style="font-variation-settings:'FILL' 1;">print</span> Imprimir Recibo
-    </button>
-    <button onclick="nuevaVenta()" class="w-full font-bold py-3 text-slate-700 active:opacity-70">
-      Nueva Venta
-    </button>
+  <div class="bottom-bar-fixed" id="exito-bottom-bar">
+    <!-- Renderizado dinámico -->
   </div>
 </div>
 
-<!-- ══════════════════ PAGO RECHAZADO / CANCELADO (NUEVO) ══════════════════ -->
+<!-- ══════════════════ PAGO RECHAZADO / CANCELADO ══════════════════ -->
 <div class="screen" id="s-cancelado" style="display:none;background:#f9fafb">
-  <!-- Header -->
   <div class="px-4 pt-4 pb-2 flex items-center justify-between flex-shrink-0">
     <div class="w-9"></div>
     <h2 class="text-center font-bold text-[18px] text-slate-800">Cancelado por el Usuario</h2>
@@ -518,12 +582,10 @@ tailwind.config = {
   </div>
 
   <div class="scroll-area px-4 pb-6 flex flex-col h-full">
-    <!-- Píldora de estado -->
     <div class="bg-red-50 text-primary text-center font-bold py-3.5 rounded-2xl mb-5 tracking-wide shadow-sm">
         PAGO RECHAZADO
     </div>
     
-    <!-- Info del pedido -->
     <div class="bg-slate-100/80 border border-slate-200 rounded-2xl p-4 mb-6 shadow-sm">
         <div class="flex justify-between items-center mb-4">
             <span class="font-bold text-slate-800 text-[15px]" id="cancel-order-id">#9HFPF71P</span>
@@ -539,7 +601,6 @@ tailwind.config = {
         </div>
     </div>
 
-    <!-- Botones de Acción -->
     <div class="mt-auto flex flex-col gap-3">
         <button onclick="showToast('🖨️ Imprimiendo recibo...')" class="w-full bg-transparent border border-primary text-primary font-bold py-3.5 rounded-full active:bg-primary/5 transition-colors text-sm">Imprimir recibo</button>
         <button onclick="goTo('s-metodo')" class="w-full bg-transparent border border-primary text-primary font-bold py-3.5 rounded-full active:bg-primary/5 transition-colors text-sm">Intentar con otro método de pago</button>
@@ -549,10 +610,10 @@ tailwind.config = {
   </div>
 </div>
 
-<!-- ================= RESUMEN DE VENTAS ================= -->
-<div class="screen" id="s-ventas" style="display:none">
+<!-- ================= RESUMEN DE VENTAS (HISTORIAL REDISEÑADO) ================= -->
+<div class="screen" id="s-ventas" style="display:none; background:#f0f2f5;">
   <!-- Header -->
-  <div class="bg-surface px-4 py-4 border-b border-slate-100 flex items-center gap-3 flex-shrink-0">
+  <div class="bg-surface px-4 py-4 border-b border-slate-100 flex items-center gap-3 flex-shrink-0 relative z-20 shadow-sm">
     <button onclick="openSheet('sh-menu')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
       <span class="ms text-slate-700">menu</span>
     </button>
@@ -561,55 +622,170 @@ tailwind.config = {
       <span class="ms text-slate-500 refresh-icon">sync</span>
     </button>
   </div>
-  <div class="scroll-area px-4 py-6">
-    <div class="flex items-center gap-2 mb-6">
-       <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-       <span class="text-xs text-slate-500 font-medium sync-time">Última sincronización: Hoy 12:00</span>
+
+  <div class="scroll-area px-4 py-6" style="padding-bottom: 100px;">
+    <!-- Sincronización -->
+    <div class="flex items-center gap-2 mb-4 justify-end">
+       <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+       <span class="text-[11px] text-slate-500 font-bold uppercase tracking-widest sync-time">Sincronizado 12:00</span>
     </div>
-    <div class="grid grid-cols-2 gap-3 mb-6">
-       <div class="bg-slate-100 rounded-2xl p-4 text-center">
-         <p class="text-xs font-bold text-slate-500 uppercase">Total Ventas</p>
-         <p class="text-xl font-black mt-1 text-slate-900" id="v-total-ventas">$0.00</p>
+
+    <!-- TARJETA PRINCIPAL: VENTAS TOTALES -->
+    <div class="bg-white rounded-[20px] p-5 mb-3 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 relative overflow-hidden">
+        <div class="flex justify-between items-start mb-1 relative z-10">
+            <p class="text-[12px] font-bold text-slate-500 uppercase tracking-widest">Ventas Totales</p>
+            <span class="ms text-slate-300" style="font-size:20px">payments</span>
+        </div>
+        <p class="text-[38px] font-black text-[#0f172a] tracking-tight relative z-10" id="v-total-ventas">$0.00</p>
+        <div class="absolute -bottom-6 -right-6 text-slate-50/50 rotate-[-15deg] pointer-events-none">
+            <span class="ms" style="font-size:120px; font-variation-settings:'FILL' 1;">monitoring</span>
+        </div>
+    </div>
+
+    <!-- TARJETAS SECUNDARIAS: PROPINAS Y ÓRDENES -->
+    <div class="grid grid-cols-2 gap-3 mb-5">
+       <div class="bg-white rounded-[20px] p-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between min-h-[110px]">
+         <div class="flex justify-between items-start">
+             <p class="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Total Propinas</p>
+             <span class="ms text-slate-300" style="font-size:18px">savings</span>
+         </div>
+         <div>
+             <p class="text-[24px] font-black text-[#0f172a] tracking-tight" id="v-total-propinas">$0.00</p>
+             <p class="text-[10px] font-medium text-slate-400 mt-0.5">Acumulado turno</p>
+         </div>
        </div>
-       <div class="bg-slate-100 rounded-2xl p-4 text-center">
-         <p class="text-xs font-bold text-slate-500 uppercase">Propinas</p>
-         <p class="text-xl font-black mt-1 text-slate-900" id="v-total-propinas">$0.00</p>
+       
+       <div class="bg-white rounded-[20px] p-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between min-h-[110px]">
+         <div class="flex justify-between items-start">
+             <p class="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Órdenes</p>
+             <span class="ms text-slate-300" style="font-size:18px">receipt_long</span>
+         </div>
+         <div>
+             <p class="text-[24px] font-black text-[#0f172a] tracking-tight" id="v-total-ordenes">0</p>
+             <p class="text-[10px] font-medium text-slate-400 mt-0.5">Total transacciones</p>
+         </div>
        </div>
     </div>
-    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">CAPACITACION</p>
-    <div class="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm" id="v-items">
+
+    <!-- MÉTODOS DE PAGO (BARRAS) -->
+    <div class="bg-white rounded-[20px] p-5 mb-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100">
+        <h3 class="font-bold text-[15px] text-[#0f172a] mb-5">Métodos de Pago</h3>
+        
+        <!-- Tarjeta -->
+        <div class="mb-4">
+            <div class="flex justify-between items-center mb-2">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center">
+                        <span class="ms text-blue-500" style="font-size:18px">credit_card</span>
+                    </div>
+                    <div>
+                        <p class="font-bold text-[14px] text-slate-800 leading-tight">Tarjeta</p>
+                        <p class="text-[11px] text-slate-400 font-medium" id="v-tx-tarjeta">0 transacciones</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="font-bold text-[14px] text-slate-800" id="v-amt-tarjeta">$0.00</p>
+                    <p class="text-[11px] text-slate-400 font-medium" id="v-pct-tarjeta">0%</p>
+                </div>
+            </div>
+            <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full bg-blue-500 rounded-full transition-all duration-500" id="v-bar-tarjeta" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- QR / Digital -->
+        <div class="mb-4">
+            <div class="flex justify-between items-center mb-2">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-purple-50 flex items-center justify-center">
+                        <span class="ms text-purple-500" style="font-size:18px">qr_code_2</span>
+                    </div>
+                    <div>
+                        <p class="font-bold text-[14px] text-slate-800 leading-tight">QR / Digital</p>
+                        <p class="text-[11px] text-slate-400 font-medium" id="v-tx-qr">0 transacciones</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="font-bold text-[14px] text-slate-800" id="v-amt-qr">$0.00</p>
+                    <p class="text-[11px] text-slate-400 font-medium" id="v-pct-qr">0%</p>
+                </div>
+            </div>
+            <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full bg-purple-500 rounded-full transition-all duration-500" id="v-bar-qr" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LISTADO DE PRODUCTOS VENDIDOS -->
+    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 ml-2">PRODUCTOS VENDIDOS</p>
+    <div class="bg-white rounded-[20px] border border-slate-100 p-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)]" id="v-items">
         <!-- Items de ventas -->
     </div>
   </div>
-  <div class="bottom-bar-fixed">
-    <button class="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95" onclick="showToast('🖨️ Imprimiendo resumen...')">
-      Imprimir resumen
+  
+  <div class="bottom-bar-fixed shadow-[0_-10px_20px_rgba(0,0,0,0.05)] relative z-20">
+    <button class="w-full bg-slate-800 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform" onclick="showToast('🖨️ Imprimiendo reporte...')">
+      <span class="ms" style="font-size:20px;">print</span> Imprimir Reporte
     </button>
   </div>
 </div>
 
 <!-- ══════════════════ ÓRDENES ══════════════════ -->
-<div class="screen" id="s-ordenes" style="display:none">
+<div class="screen" id="s-ordenes" style="display:none; background:#F9FAFB">
   <!-- Header -->
   <div class="bg-surface px-4 py-4 border-b border-slate-100 flex items-center gap-3 flex-shrink-0">
     <button onclick="openSheet('sh-menu')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
       <span class="ms text-slate-700">menu</span>
     </button>
-    <h2 class="flex-1 text-center font-black text-[17px]">Órdenes</h2>
+    <div class="flex-1 flex flex-col items-center">
+        <h2 class="font-black text-[17px] leading-tight">América vs Chivas</h2>
+        <div class="flex items-center gap-1.5 mt-0.5">
+            <div id="o-header-dot" class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+            <p class="text-[11px] text-slate-500 font-medium"><span id="o-count-header">0</span> órdenes · <span class="sync-time">Actualizado</span></p>
+        </div>
+    </div>
     <button onclick="simulateRefresh()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
       <span class="ms text-slate-500 refresh-icon">sync</span>
     </button>
   </div>
-  <div class="scroll-area px-4 py-6">
-    <div class="flex items-center gap-2 mb-4">
-       <span class="text-xs text-slate-500 font-medium sync-time">Última sincronización: Hoy 12:00</span>
+  
+  <div class="scroll-area px-4 py-4">
+    <!-- Alerta de sincronización Dinámica -->
+    <div id="sync-alert-box" class="bg-emerald-50 border border-emerald-100 rounded-xl py-3 text-center mb-4 transition-all">
+        <span class="text-sm font-semibold text-emerald-600 flex items-center justify-center gap-1.5"><span class="ms" style="font-size:18px;">cloud_done</span> Órdenes sincronizadas</span>
     </div>
-    <div class="bg-slate-100 rounded-2xl p-3 text-center mb-6">
-        <span class="text-sm font-bold text-slate-700">Ordenes sincronizadas: <span id="o-count">0/0</span></span>
+
+    <!-- Contenedor del listado -->
+    <div class="flex flex-col gap-4" id="o-list">
+        <!-- Listado de órdenes se inyecta aquí -->
     </div>
-    <div class="flex flex-col gap-3" id="o-list">
-        <!-- Listado de órdenes -->
-    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ DETALLE DE ORDEN ══════════════════ -->
+<div class="screen" id="s-detalle-orden" style="display:none; background:#F9FAFB">
+  <!-- Header -->
+  <div class="bg-surface px-4 py-4 border-b border-slate-100 flex items-center gap-3 flex-shrink-0 relative z-20 shadow-sm">
+    <button onclick="goBack('s-ordenes')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100">
+      <span class="ms text-slate-700">arrow_back</span>
+    </button>
+    <h2 class="flex-1 text-center font-black text-[17px]">Detalle de Orden</h2>
+    <div class="w-9"></div>
+  </div>
+  
+  <div class="scroll-area px-4 py-6" style="padding-bottom: 30px;">
+    <!-- Contenido dinámico del detalle se inyecta aquí -->
+    <div id="detalle-orden-content"></div>
+  </div>
+  
+  <!-- Botones de Acción Fijos -->
+  <div class="bottom-bar-fixed shadow-[0_-10px_20px_rgba(0,0,0,0.05)] relative z-20 flex flex-col gap-3 pt-4">
+    <button class="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform" onclick="showToast('🖨️ Imprimiendo Ticket...')">
+      <span class="ms" style="font-size:20px;">print</span> Imprimir Ticket
+    </button>
+    <button class="w-full bg-transparent border border-slate-200 text-slate-600 font-bold py-4 rounded-2xl flex items-center justify-center gap-2 active:bg-slate-50 transition-colors" onclick="showToast('🚫 Venta cancelada'); goBack('s-ordenes')">
+      <span class="ms" style="font-size:20px;">delete</span> Cancelar venta
+    </button>
   </div>
 </div>
 
@@ -686,7 +862,7 @@ tailwind.config = {
 <!-- TOAST -->
 <div class="fixed top-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full text-sm font-semibold z-50 opacity-0 transition-opacity pointer-events-none whitespace-nowrap max-w-[90vw] text-center" id="toast"></div>
 
-<!-- PROCESANDO (Solo para QR en este flujo) -->
+<!-- PROCESANDO -->
 <div class="fixed inset-0 bg-black/70 z-50 items-center justify-center" id="proc-overlay" style="display:none">
   <div class="bg-white rounded-2xl p-8 text-center w-72 shadow-2xl">
     <div class="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -699,7 +875,7 @@ tailwind.config = {
 
 <script>
 // ══════════════════════════════════════
-// DATOS
+// DATOS Y ESTADO GLOBAL
 // ══════════════════════════════════════
 const PRODS = [
   {id:'hamburguesa', cat:'Comida',   name:'Hamburguesa',           price:100, e:'🍔', img:'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80', bg:'#fff7ed'},
@@ -711,18 +887,28 @@ const PRODS = [
 const CATS = ['Todos', 'Comida', 'Cervezas', 'Bebidas', 'Destilados', 'Snacks'];
 const PROP_PCTS = [0, 10, 15, 20, null];
 
-// ══════════════════════════════════════
-// STATE
-// ══════════════════════════════════════
 let carrito={}, catActiva='Todos', metodoPago='tarjeta';
 let propPct=null, customAmt=0, customStr='';
-let nota='', currentOrderId='C000V0XX', current='s-launch';
+let nota='', currentOrderId='', current='s-launch';
 
-// HISTORIAL
+// HISTORIAL Y DIVISIÓN DE CUENTA
 let totalSalesValue = 0;
 let totalTipsValue = 0;
 let soldItems = {};
 let ordersHistory = [];
+let unsyncedOrdersCount = 0;
+
+let isSplitPayment = false;
+let splitTotalOriginal = 0;
+let splitPaidAmount = 0;
+let splitCurrentPayment = 0;
+let splitCustomStr = '';
+let itemsRegisteredForThisOrder = false;
+
+let statsMetodos = {
+    tarjeta: { tx: 0, amt: 0 },
+    qr: { tx: 0, amt: 0 }
+};
 
 // ══════════════════════════════════════
 // INIT
@@ -735,20 +921,24 @@ function init(){ renderPills(); renderProds(); updateVentasUI(); updateOrdenesUI
 function setActiveLink(id) {
     document.querySelectorAll('.sidebar-link').forEach(el => {
         el.className = "sidebar-link flex items-center gap-4 text-slate-500 rounded-xl px-4 py-3 text-sm";
-        el.querySelector('.ms').style.fontVariationSettings = "normal";
+        if(el.querySelector('.ms')) el.querySelector('.ms').style.fontVariationSettings = "normal";
     });
     const active = document.getElementById(id);
     if(active) {
         active.className = "sidebar-link flex items-center gap-4 bg-primary/10 text-primary rounded-xl px-4 py-3 font-semibold text-sm";
-        active.querySelector('.ms').style.fontVariationSettings = "'FILL' 1";
+        if(active.querySelector('.ms')) active.querySelector('.ms').style.fontVariationSettings = "'FILL' 1";
     }
 }
 
 function goTo(id){
   if(id==='s-pedido'&&getTI()===0) return;
-  document.getElementById(current).style.display='none';
-  const nxt=document.getElementById(id);
-  nxt.style.display='flex';
+  
+  const currentEl = document.getElementById(current);
+  if(currentEl) currentEl.style.display='none';
+  
+  const nxt = document.getElementById(id);
+  if(nxt) nxt.style.display='flex';
+  
   current=id;
 
   if(id==='s-catalogo') setActiveLink('link-vender');
@@ -758,7 +948,12 @@ function goTo(id){
   if(typeof launchTutIfNeeded==='function') launchTutIfNeeded(id);
   if(id==='s-pedido') renderPedido();
   if(id==='s-propina') renderPropina();
-  if(id==='s-metodo') document.getElementById('metodo-total').textContent='$'+getTotal().toFixed(2);
+  
+  const metodoTotal = document.getElementById('metodo-total');
+  if(id==='s-metodo' && metodoTotal) {
+      metodoTotal.textContent = '$' + (isSplitPayment ? splitCurrentPayment.toFixed(2) : getTotal().toFixed(2));
+  }
+  
   if(id==='s-prop-custom') initCustom();
 }
 function goBack(id){ goTo(id); }
@@ -766,30 +961,42 @@ function goBack(id){ goTo(id); }
 function simulateRefresh() {
     const icons = document.querySelectorAll('.refresh-icon');
     icons.forEach(icon => icon.classList.add('animate-spin'));
-    showToast('🔄 Catálogo actualizado');
+    showToast('🔄 Sincronizando con la nube...');
 
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'});
-    document.querySelectorAll('.sync-time').forEach(el => {
-        el.innerText = `Última sincronización: Hoy ${timeStr}`;
-    });
+    setTimeout(() => { 
+        icons.forEach(icon => icon.classList.remove('animate-spin')); 
+        
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'});
+        document.querySelectorAll('.sync-time').forEach(el => {
+            el.innerText = `Sincronizado ${timeStr}`;
+        });
 
-    setTimeout(() => { icons.forEach(icon => icon.classList.remove('animate-spin')); }, 1200);
+        unsyncedOrdersCount = 0;
+        updateOrdenesUI();
+        
+        showToast('✅ Órdenes sincronizadas con éxito');
+    }, 1200);
 }
 
 // ══════════════════════════════════════
 // CATÁLOGO
 // ══════════════════════════════════════
 function renderPills(){
-  document.getElementById('pills').innerHTML=CATS.map(c=>
+  const pillsEl = document.getElementById('pills');
+  if(!pillsEl) return;
+  pillsEl.innerHTML=CATS.map(c=>
     `<button onclick="selCat('${c}')" class="flex-shrink-0 px-5 py-2.5 rounded-full text-[15px] font-bold transition-all ${c===catActiva?'bg-primary text-white':'bg-white border border-slate-200 text-[#1e293b] hover:bg-slate-50'}">${c}</button>`
   ).join('');
 }
 function selCat(c){ catActiva=c; renderPills(); renderProds(); }
 
 function renderProds(){
+  const prodsGrid = document.getElementById('prods-grid');
+  if(!prodsGrid) return;
+  
   const list=catActiva==='Todos'?PRODS:PRODS.filter(p=>p.cat===catActiva);
-  document.getElementById('prods-grid').innerHTML=list.map(p=>{
+  prodsGrid.innerHTML=list.map(p=>{
     const qty=carrito[p.id]||0;
     const imgH = p.img ? `<img src="${p.img}" alt="${p.name}" class="w-full h-full object-cover">` : '';
     const emojiH = p.img ? '' : `<div class="w-full h-full flex items-center justify-center text-6xl" style="background:${p.bg}">${p.e}</div>`;
@@ -843,9 +1050,14 @@ function getPropAmt(){
 function getTotal(){ return getSub()+getPropAmt(); }
 function updBot(){
   const n=getTI(), s=getSub();
-  document.getElementById('bot-label').textContent=`TOTAL (${n} ITEM${n!==1?'S':''})`;
-  document.getElementById('bot-total').textContent='$'+s.toFixed(2);
-  document.getElementById('btn-continuar').disabled=n===0;
+  const botLabel = document.getElementById('bot-label');
+  if(botLabel) botLabel.textContent=`TOTAL (${n} ITEM${n!==1?'S':''})`;
+  
+  const botTotal = document.getElementById('bot-total');
+  if(botTotal) botTotal.textContent='$'+s.toFixed(2);
+  
+  const btnContinuar = document.getElementById('btn-continuar');
+  if(btnContinuar) btnContinuar.disabled=n===0;
 }
 
 // ══════════════════════════════════════
@@ -854,6 +1066,8 @@ function updBot(){
 function renderPedido(){
   const items = Object.entries(carrito).map(([id,qty]) => ({p: PRODS.find(x=>x.id===id), qty}));
   const n = getTI(), s = getSub();
+  const orderScroll = document.getElementById('order-scroll');
+  if(!orderScroll) return;
   
   let h=`<div class="flex items-center justify-between pt-4 pb-2">
       <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Barra Lateral</span>
@@ -879,13 +1093,19 @@ function renderPedido(){
     </div>`;
   });
   
-  document.getElementById('order-scroll').innerHTML=h;
-  document.getElementById('pedido-count').textContent=`(${n} artículo${n!==1?'s':''})`;
-  document.getElementById('pedido-total').textContent='$'+s.toFixed(2);
+  orderScroll.innerHTML=h;
+  
+  const pedidoCount = document.getElementById('pedido-count');
+  if(pedidoCount) pedidoCount.textContent=`(${n} artículo${n!==1?'s':''})`;
+  
+  const pedidoTotal = document.getElementById('pedido-total');
+  if(pedidoTotal) pedidoTotal.textContent='$'+s.toFixed(2);
   
   const nl=document.getElementById('nota-label');
-  if(nota){ nl.textContent='✅ '+nota.substring(0,30)+(nota.length>30?'...':''); nl.className='text-sm font-semibold text-primary'; }
-  else { nl.textContent='Agregar comentario al pedido...'; nl.className='text-sm text-slate-400'; }
+  if(nl) {
+      if(nota){ nl.textContent='✅ '+nota.substring(0,30)+(nota.length>30?'...':''); nl.className='text-sm font-semibold text-primary'; }
+      else { nl.textContent='Agregar comentario al pedido...'; nl.className='text-sm text-slate-400'; }
+  }
 }
 function chgP(id,d){ chg(id,d); if(getTI()===0){ goBack('s-catalogo'); return; } renderPedido(); }
 
@@ -894,32 +1114,39 @@ function chgP(id,d){ chg(id,d); if(getTI()===0){ goBack('s-catalogo'); return; }
 // ══════════════════════════════════════
 function renderPropina(){
   const sub=getSub();
-  document.getElementById('prop-sub').textContent='$'+sub.toFixed(2);
-  document.getElementById('prop-grid').innerHTML=PROP_PCTS.map(p=>{
-    if(p===null) return `<button onclick="goTo('s-prop-custom')" class="prop-btn border-2 ${propPct==='custom'?'border-primary bg-primary/5':'border-slate-200'} rounded-2xl py-4 flex flex-col items-center gap-1 transition-all active:scale-95">
-      <span class="ms text-slate-400" style="font-size:22px">edit</span>
-      <span class="text-xs font-bold text-slate-400">Custom</span>
-    </button>`;
-    const amt=sub*p/100;
-    const sel=propPct===p;
-    return `<button onclick="selProp(${p})" class="prop-btn border-2 ${sel?'border-primary bg-primary/5':'border-slate-200'} rounded-2xl py-4 flex flex-col items-center gap-1 transition-all active:scale-95">
-      <span class="text-[18px] font-black ${sel?'text-primary':'text-slate-700'}">${p}%</span>
-      ${p>0?`<span class="text-xs font-bold text-slate-400">$${amt.toFixed(2)}</span>`:''}
-    </button>`;
-  }).join('');
+  const propSub = document.getElementById('prop-sub');
+  if(propSub) propSub.textContent='$'+sub.toFixed(2);
+  
+  const propGrid = document.getElementById('prop-grid');
+  if(propGrid) {
+      propGrid.innerHTML=PROP_PCTS.map(p=>{
+        if(p===null) return `<button onclick="goTo('s-prop-custom')" class="prop-btn border-2 ${propPct==='custom'?'border-primary bg-primary/5':'border-slate-200'} rounded-2xl py-4 flex flex-col items-center gap-1 transition-all active:scale-95">
+          <span class="ms text-slate-400" style="font-size:22px">edit</span>
+          <span class="text-xs font-bold text-slate-400">Custom</span>
+        </button>`;
+        const amt=sub*p/100;
+        const sel=propPct===p;
+        return `<button onclick="selProp(${p})" class="prop-btn border-2 ${sel?'border-primary bg-primary/5':'border-slate-200'} rounded-2xl py-4 flex flex-col items-center gap-1 transition-all active:scale-95">
+          <span class="text-[18px] font-black ${sel?'text-primary':'text-slate-700'}">${p}%</span>
+          ${p>0?`<span class="text-xs font-bold text-slate-400">$${amt.toFixed(2)}</span>`:''}
+        </button>`;
+      }).join('');
+  }
   updPropDisplay();
 }
-function selProp(p){ propPct=p; customAmt=0; renderPropina(); document.getElementById('prop-confirm').disabled=false; }
+function selProp(p){ propPct=p; customAmt=0; renderPropina(); const btn = document.getElementById('prop-confirm'); if(btn) btn.disabled=false; }
 function updPropDisplay(){
   const m=getPropAmt(), t=getSub()+m;
-  document.getElementById('prop-monto').textContent='$'+m.toFixed(2);
-  document.getElementById('prop-total').textContent='$'+t.toFixed(2);
+  const propMonto = document.getElementById('prop-monto');
+  if(propMonto) propMonto.textContent='$'+m.toFixed(2);
+  const propTotal = document.getElementById('prop-total');
+  if(propTotal) propTotal.textContent='$'+t.toFixed(2);
 }
 
 // ══════════════════════════════════════
 // PROPINA CUSTOM
 // ══════════════════════════════════════
-function initCustom(){ customStr=''; document.getElementById('custom-sub').textContent='$'+getSub().toFixed(2); updCustom(); }
+function initCustom(){ customStr=''; const customSub = document.getElementById('custom-sub'); if(customSub) customSub.textContent='$'+getSub().toFixed(2); updCustom(); }
 function npC(v){
   if(v==='del') customStr=customStr.slice(0,-1);
   else if(v==='.'){ if(customStr.includes('.')) return; customStr+=v; }
@@ -929,14 +1156,121 @@ function npC(v){
 function updCustom(){
   const sub=getSub(), amt=parseFloat(customStr)||0;
   const pct=sub>0?(amt/sub*100).toFixed(1):'0';
-  document.getElementById('custom-display').textContent=customStr?'$'+customStr:'$0';
-  document.getElementById('custom-pct').textContent=pct+'%';
-  document.getElementById('custom-total').textContent='$'+(sub+amt).toFixed(2);
+  const customDisplay = document.getElementById('custom-display');
+  if(customDisplay) customDisplay.textContent=customStr?'$'+customStr:'$0';
+  const customPct = document.getElementById('custom-pct');
+  if(customPct) customPct.textContent=pct+'%';
+  const customTotal = document.getElementById('custom-total');
+  if(customTotal) customTotal.textContent='$'+(sub+amt).toFixed(2);
 }
 function confirmarCustom(){
   customAmt=parseFloat(customStr)||0; propPct='custom';
-  goBack('s-propina'); renderPropina(); document.getElementById('prop-confirm').disabled=false;
+  goBack('s-propina'); renderPropina(); const btn = document.getElementById('prop-confirm'); if(btn) btn.disabled=false;
 }
+
+// ══════════════════════════════════════
+// LÓGICA DE DIVIDIR CUENTA
+// ══════════════════════════════════════
+function iniciarSplit() {
+    if(!isSplitPayment) {
+        isSplitPayment = true;
+        splitTotalOriginal = getTotal();
+        splitPaidAmount = 0;
+    }
+    if(!currentOrderId) {
+        currentOrderId = 'C' + Math.floor(Math.random() * 900 + 100) + 'V8HB';
+    }
+    renderSplitScreen();
+    goTo('s-dividir-cuenta');
+}
+
+function renderSplitScreen() {
+    let pending = splitTotalOriginal - splitPaidAmount;
+    
+    if(splitPaidAmount === 0) {
+        document.getElementById('split-info-initial').classList.remove('hidden');
+        document.getElementById('split-info-ongoing').classList.add('hidden');
+        document.getElementById('split-total-lbl').textContent = '$' + splitTotalOriginal.toFixed(2);
+        
+        document.getElementById('btn-back-split').style.visibility = 'visible';
+        
+        document.getElementById('split-quick-btns').innerHTML = `
+            <button onclick="setSplitQuick(2)" class="w-14 h-14 rounded-full border-2 border-slate-200 text-slate-600 font-bold text-[15px] hover:bg-slate-50 active:bg-slate-100 transition-colors">1/2</button>
+            <button onclick="setSplitQuick(3)" class="w-14 h-14 rounded-full border-2 border-slate-200 text-slate-600 font-bold text-[15px] hover:bg-slate-50 active:bg-slate-100 transition-colors">1/3</button>
+            <button onclick="setSplitQuick(4)" class="w-14 h-14 rounded-full border-2 border-slate-200 text-slate-600 font-bold text-[15px] hover:bg-slate-50 active:bg-slate-100 transition-colors">1/4</button>
+        `;
+    } else {
+        document.getElementById('split-info-initial').classList.add('hidden');
+        document.getElementById('split-info-ongoing').classList.remove('hidden');
+        
+        document.getElementById('split-total-orig-lbl').textContent = '$' + splitTotalOriginal.toFixed(2);
+        document.getElementById('split-paid-lbl').textContent = '$' + splitPaidAmount.toFixed(2);
+        document.getElementById('split-pending-lbl').textContent = '$' + pending.toFixed(2);
+        
+        document.getElementById('btn-back-split').style.visibility = 'hidden';
+        
+        document.getElementById('split-quick-btns').innerHTML = `
+            <button onclick="setSplitQuick('todo')" class="w-[60px] h-[60px] rounded-full border-2 border-primary text-primary font-bold text-[15px] bg-primary/5 transition-colors">Todo</button>
+            <button onclick="setSplitQuick(2)" class="w-[50px] h-[50px] mt-[5px] rounded-full border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 active:bg-slate-100 transition-colors">1/2</button>
+            <button onclick="setSplitQuick(3)" class="w-[50px] h-[50px] mt-[5px] rounded-full border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 active:bg-slate-100 transition-colors">1/3</button>
+            <button onclick="setSplitQuick(4)" class="w-[50px] h-[50px] mt-[5px] rounded-full border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 active:bg-slate-100 transition-colors">1/4</button>
+        `;
+    }
+    
+    splitCustomStr = '';
+    updSplit();
+}
+
+function setSplitQuick(val) {
+    let pending = splitTotalOriginal - splitPaidAmount;
+    let amt = 0;
+    if(val === 'todo') {
+        amt = pending;
+    } else {
+        amt = splitTotalOriginal / val;
+        if(amt > pending) amt = pending; 
+    }
+    splitCustomStr = amt.toFixed(2);
+    updSplit();
+}
+
+function npSplit(v){
+    if(v==='del') splitCustomStr=splitCustomStr.slice(0,-1);
+    else if(v==='.'){ if(splitCustomStr.includes('.')) return; splitCustomStr+=v; }
+    else { if(splitCustomStr.length>=8) return; splitCustomStr+=v; }
+    updSplit();
+}
+
+function updSplit(){
+    let amt = parseFloat(splitCustomStr) || 0;
+    let pending = splitTotalOriginal - splitPaidAmount;
+    
+    if(amt > pending) {
+        amt = pending;
+        splitCustomStr = amt.toFixed(2);
+    }
+    
+    splitCurrentPayment = amt;
+    document.getElementById('split-current-display').textContent = splitCustomStr ? splitCustomStr : "0.00";
+    
+    let remaining = pending - splitCurrentPayment;
+    document.getElementById('split-remaining-lbl').textContent = '$' + remaining.toFixed(2);
+    
+    document.getElementById('btn-split-continue').disabled = (splitCurrentPayment <= 0);
+}
+
+function confirmarSplit() {
+    if (splitCurrentPayment > 0) {
+        document.getElementById('metodo-total').textContent = '$' + splitCurrentPayment.toFixed(2);
+        goTo('s-metodo');
+    }
+}
+
+function continuarSplit() {
+    renderSplitScreen();
+    goTo('s-dividir-cuenta');
+}
+
 
 // ══════════════════════════════════════
 // MÉTODO
@@ -953,13 +1287,15 @@ function selMetodo(m){
 }
 
 function procesarPago(){
+    let amt = isSplitPayment ? splitCurrentPayment : getTotal();
     if(metodoPago === 'tarjeta') {
-        document.getElementById('tf-monto').textContent = '$' + getTotal().toFixed(2);
+        const tfMonto = document.getElementById('tf-monto');
+        if(tfMonto) tfMonto.textContent = '$' + amt.toFixed(2);
         goTo('s-tarjeta-flow');
         setTarjetaState('aproxime');
     } else if(metodoPago === 'qr') {
         const qrLbl = document.getElementById('qr-monto-lbl');
-        if (qrLbl) qrLbl.textContent = '$' + getTotal().toFixed(2);
+        if (qrLbl) qrLbl.textContent = '$' + amt.toFixed(2);
         goTo('s-qr');
     }
 }
@@ -970,14 +1306,16 @@ function procesarPago(){
 let tfNip = "";
 
 function setTarjetaState(state) {
-    ['tf-fase-aproxime', 'tf-fase-leyendo', 'tf-fase-nip', 'tf-fase-autorizando', 'tf-fase-aprobada', 'tf-modal-retira', 'tf-footer-logos', 'tf-footer-mc', 'tf-numpad-container'].forEach(id => {
-        document.getElementById(id).classList.add('hidden');
+    ['tf-fase-aproxime', 'tf-fase-leyendo', 'tf-fase-nip', 'tf-fase-autorizando', 'tf-fase-aprobada', 'tf-modal-retira', 'tf-footer-logos', 'tf-footer-mc', 'tf-numpad-container', 'tf-modal-cancel-confirm'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.classList.add('hidden');
     });
     
     const container = document.getElementById('s-tarjeta-flow');
+    if(!container) return;
 
     if(state === 'aproxime') {
-        container.style.backgroundColor = '#009de0'; // Azul
+        container.style.backgroundColor = '#009de0'; 
         document.getElementById('tf-fase-aproxime').classList.remove('hidden');
         document.getElementById('tf-footer-logos').classList.remove('hidden');
     } 
@@ -988,7 +1326,8 @@ function setTarjetaState(state) {
     }
     else if(state === 'nip') {
         tfNip = "";
-        document.getElementById('tf-nip-display').textContent = "";
+        const nipDisplay = document.getElementById('tf-nip-display');
+        if(nipDisplay) nipDisplay.textContent = "";
         document.getElementById('tf-fase-nip').classList.remove('hidden');
         document.getElementById('tf-numpad-container').classList.remove('hidden');
     }
@@ -1004,7 +1343,7 @@ function setTarjetaState(state) {
         setTimeout(() => setTarjetaState('aprobada'), 2000); 
     }
     else if(state === 'aprobada') {
-        container.style.backgroundColor = '#22c55e'; // Verde
+        container.style.backgroundColor = '#22c55e'; 
         document.getElementById('tf-fase-aprobada').classList.remove('hidden');
         document.getElementById('tf-footer-mc').classList.remove('hidden');
         setTimeout(() => {
@@ -1022,7 +1361,8 @@ function pTFNip(val) {
     } else {
         if(tfNip.length < 4) tfNip += val;
     }
-    document.getElementById('tf-nip-display').textContent = '*'.repeat(tfNip.length);
+    const nipDisplay = document.getElementById('tf-nip-display');
+    if(nipDisplay) nipDisplay.textContent = '*'.repeat(tfNip.length);
 }
 
 function tfSubmitNip() {
@@ -1031,35 +1371,40 @@ function tfSubmitNip() {
     } else if(tfNip.length > 0) {
         showToast("⚠️ NIP Incorrecto. Use '0000'");
         tfNip = "";
-        document.getElementById('tf-nip-display').textContent = "";
+        const nipDisplay = document.getElementById('tf-nip-display');
+        if(nipDisplay) nipDisplay.textContent = "";
     }
 }
 
-// ══════════════════════════════════════
-// LÓGICA DE CANCELACIÓN DE TARJETA (NUEVA)
-// ══════════════════════════════════════
 function showCancelModal() {
-    document.getElementById('tf-modal-cancel-confirm').classList.remove('hidden');
+    const el = document.getElementById('tf-modal-cancel-confirm');
+    if(el) el.classList.remove('hidden');
 }
 
 function hideCancelModal() {
-    document.getElementById('tf-modal-cancel-confirm').classList.add('hidden');
+    const el = document.getElementById('tf-modal-cancel-confirm');
+    if(el) el.classList.add('hidden');
 }
 
 function confirmCancelTransaction() {
     hideCancelModal();
-    const total = getTotal(), n = getTI();
+    let amt = isSplitPayment ? splitCurrentPayment : getTotal();
+    const n = getTI();
     const now = new Date();
     
-    currentOrderId = 'C' + Math.floor(Math.random() * 900 + 100) + 'V8HB'; 
+    if(!currentOrderId) currentOrderId = 'C' + Math.floor(Math.random() * 900 + 100) + 'V8HB'; 
     
-    document.getElementById('cancel-order-id').textContent = '#' + currentOrderId;
-    document.getElementById('cancel-total').textContent = '$' + total.toFixed(2);
-    document.getElementById('cancel-qty').textContent = n;
+    const cancelOrderId = document.getElementById('cancel-order-id');
+    if(cancelOrderId) cancelOrderId.textContent = '#' + currentOrderId;
+    const cancelTotal = document.getElementById('cancel-total');
+    if(cancelTotal) cancelTotal.textContent = '$' + amt.toFixed(2);
+    const cancelQty = document.getElementById('cancel-qty');
+    if(cancelQty) cancelQty.textContent = n;
     
     const dateStr = now.toLocaleDateString('es-MX', {day: '2-digit', month: 'short'}).replace('.','');
     const timeStr = now.toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit', hour12: false});
-    document.getElementById('cancel-date').textContent = `${dateStr}. ${timeStr}`;
+    const cancelDate = document.getElementById('cancel-date');
+    if(cancelDate) cancelDate.textContent = `${dateStr}. ${timeStr}`;
 
     goTo('s-cancelado');
 }
@@ -1072,6 +1417,7 @@ function retryCardPayment() {
 function vaciarPedidoFromCancel() {
     carrito = {}; propPct = null; customAmt = 0; customStr = '';
     nota = ''; currentOrderId = ''; metodoPago = 'tarjeta';
+    isSplitPayment = false; splitTotalOriginal = 0; splitPaidAmount = 0; splitCurrentPayment = 0; itemsRegisteredForThisOrder = false;
     renderProds(); updBot();
     goTo('s-catalogo');
     showToast('🗑 Venta cancelada');
@@ -1082,11 +1428,13 @@ function vaciarPedidoFromCancel() {
 // ══════════════════════════════════════
 function procesarPagoQrExito(){
   const ov=document.getElementById('proc-overlay');
+  if(!ov) return;
   ov.style.display='flex';
   const steps=['Verificando QR...','Procesando pago...','¡Aprobado! ✓'];
   let i=0;
   const iv=setInterval(()=>{
-    document.getElementById('proc-msg').textContent=steps[i++];
+    const procMsg = document.getElementById('proc-msg');
+    if(procMsg) procMsg.textContent=steps[i++];
     if(i>=steps.length){ clearInterval(iv); setTimeout(()=>{ ov.style.display='none'; registrarVenta(); mostrarExito(); },500); }
   },700);
 }
@@ -1096,123 +1444,375 @@ function procesarPagoQrExito(){
 // ══════════════════════════════════════
 function registrarVenta() {
     let subtotal = 0, totalQty = 0;
+    let cartSnapshot = {}; 
+    
     for (let id in carrito) {
-        soldItems[id] = (soldItems[id] || 0) + carrito[id];
+        if(!itemsRegisteredForThisOrder) {
+            soldItems[id] = (soldItems[id] || 0) + carrito[id];
+        }
         const item = PRODS.find(p => p.id === id);
         subtotal += carrito[id] * item.price;
         totalQty += carrito[id];
+        cartSnapshot[id] = carrito[id]; 
     }
-    let tipAmount = getPropAmt();
     
-    totalSalesValue += subtotal;
-    totalTipsValue += tipAmount;
+    itemsRegisteredForThisOrder = true;
+    
+    let tipAmount = getPropAmt();
+    let totalCobrado = isSplitPayment ? splitCurrentPayment : (subtotal + tipAmount);
+    
+    totalSalesValue += totalCobrado; 
+    let proportionalTip = isSplitPayment ? (tipAmount * (splitCurrentPayment / splitTotalOriginal)) : tipAmount;
+    totalTipsValue += proportionalTip;
+
+    if (metodoPago === 'tarjeta') {
+        statsMetodos.tarjeta.tx += 1;
+        statsMetodos.tarjeta.amt += totalCobrado;
+    } else if (metodoPago === 'qr') {
+        statsMetodos.qr.tx += 1;
+        statsMetodos.qr.amt += totalCobrado;
+    }
 
     const now = new Date();
     const dateStr = now.toLocaleDateString('es-MX', {day: '2-digit', month: 'short'}).toUpperCase();
     const timeStr = now.toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit', hour12: false});
     const fullDate = `${dateStr}. ${timeStr}`;
 
-    currentOrderId = 'C' + Math.floor(Math.random() * 900 + 100) + 'V8HB';
+    const dateLongStr = now.toLocaleDateString('es-MX', {day: '2-digit', month: 'long', year: 'numeric'});
+    const fullDateLong = `${dateLongStr}, ${timeStr}`;
 
-    ordersHistory.unshift({
-        id: currentOrderId,
-        qty: totalQty,
-        total: subtotal + tipAmount,
-        tip: tipAmount,
-        datetime: fullDate
-    });
+    if(!currentOrderId) {
+        currentOrderId = 'C' + Math.floor(Math.random() * 900 + 100) + 'V8HB';
+    }
+
+    // LÓGICA DE AGRUPACIÓN PARA DIVIDIR CUENTA
+    let existingOrder = ordersHistory.find(o => o.id === currentOrderId);
+
+    if (existingOrder) {
+        existingOrder.subtotal += isSplitPayment ? (totalCobrado - proportionalTip) : subtotal;
+        existingOrder.total += totalCobrado;
+        existingOrder.tip += proportionalTip;
+        existingOrder.pagos.push({
+            metodo: metodoPago,
+            amount: totalCobrado
+        });
+    } else {
+        ordersHistory.unshift({
+            id: currentOrderId,
+            qty: totalQty,
+            subtotal: isSplitPayment ? (totalCobrado - proportionalTip) : subtotal,
+            total: totalCobrado,
+            tip: proportionalTip,
+            datetime: fullDate,
+            datetimeLong: fullDateLong,
+            pagos: [{
+                metodo: metodoPago,
+                amount: totalCobrado
+            }],
+            items: cartSnapshot 
+        });
+        unsyncedOrdersCount++; 
+    }
+    
+    if(isSplitPayment) {
+        splitPaidAmount += splitCurrentPayment;
+    }
 }
 
 function updateVentasUI() {
-    document.getElementById('v-total-ventas').textContent = '$' + totalSalesValue.toFixed(2);
-    document.getElementById('v-total-propinas').textContent = '$' + totalTipsValue.toFixed(2);
+    const vTotalVentas = document.getElementById('v-total-ventas');
+    if (vTotalVentas) vTotalVentas.textContent = '$' + totalSalesValue.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    
+    const vTotalPropinas = document.getElementById('v-total-propinas');
+    if (vTotalPropinas) vTotalPropinas.textContent = '$' + totalTipsValue.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    
+    const vTotalOrdenes = document.getElementById('v-total-ordenes');
+    if (vTotalOrdenes) vTotalOrdenes.textContent = ordersHistory.length;
+
+    let totalGeneral = totalSalesValue; 
+    let pctTarjeta = totalGeneral > 0 ? Math.round((statsMetodos.tarjeta.amt / totalGeneral) * 100) : 0;
+    let pctQr = totalGeneral > 0 ? Math.round((statsMetodos.qr.amt / totalGeneral) * 100) : 0;
+
+    const vTxTarjeta = document.getElementById('v-tx-tarjeta');
+    if(vTxTarjeta) vTxTarjeta.textContent = `${statsMetodos.tarjeta.tx} transaccion${statsMetodos.tarjeta.tx !== 1 ? 'es' : ''}`;
+    
+    const vAmtTarjeta = document.getElementById('v-amt-tarjeta');
+    if(vAmtTarjeta) vAmtTarjeta.textContent = '$' + statsMetodos.tarjeta.amt.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    
+    const vPctTarjeta = document.getElementById('v-pct-tarjeta');
+    if(vPctTarjeta) vPctTarjeta.textContent = `${pctTarjeta}%`;
+    
+    const vBarTarjeta = document.getElementById('v-bar-tarjeta');
+    if(vBarTarjeta) vBarTarjeta.style.width = `${pctTarjeta}%`;
+
+    const vTxQr = document.getElementById('v-tx-qr');
+    if(vTxQr) vTxQr.textContent = `${statsMetodos.qr.tx} transaccion${statsMetodos.qr.tx !== 1 ? 'es' : ''}`;
+    
+    const vAmtQr = document.getElementById('v-amt-qr');
+    if(vAmtQr) vAmtQr.textContent = '$' + statsMetodos.qr.amt.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    
+    const vPctQr = document.getElementById('v-pct-qr');
+    if(vPctQr) vPctQr.textContent = `${pctQr}%`;
+    
+    const vBarQr = document.getElementById('v-bar-qr');
+    if(vBarQr) vBarQr.style.width = `${pctQr}%`;
 
     const container = document.getElementById('v-items');
+    if (!container) return;
+
     let hasItems = false;
     let h = '';
+    let subtotalPuro = 0; 
+    
     for (let id in soldItems) {
         hasItems = true;
         let qty = soldItems[id];
         let item = PRODS.find(p => p.id === id);
         let lineTotal = qty * item.price;
+        subtotalPuro += lineTotal;
 
         h += `
             <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center">${qty}</div>
+                    <div class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 font-black text-[13px] flex items-center justify-center">${qty}</div>
                     <div>
-                        <p class="font-bold text-sm text-slate-800">${item.name}</p>
-                        <p class="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Piezas</p>
+                        <p class="font-bold text-[13px] text-slate-800 leading-tight">${item.name}</p>
                     </div>
                 </div>
-                <span class="font-bold text-[15px] text-slate-900">$${lineTotal.toFixed(2)}</span>
+                <span class="font-bold text-[14px] text-slate-900">$${lineTotal.toFixed(2)}</span>
             </div>
         `;
     }
-    if(!hasItems) h = '<p class="text-center text-sm font-medium text-slate-400 py-6">No hay ventas registradas</p>';
-    h += `<div class="flex justify-between items-center mt-3 pt-3 border-t border-slate-200">
-            <span class="font-black text-slate-800">TOTAL FINAL</span>
-            <span class="bg-primary text-white font-bold text-sm px-3 py-1 rounded-full shadow-sm">$${totalSalesValue.toFixed(2)}</span>
-          </div>`;
+    
+    if(!hasItems) {
+        h = '<div class="flex flex-col items-center justify-center py-6 opacity-50"><span class="ms text-[40px] mb-2">inbox</span><p class="text-sm font-medium">Aún no hay ventas</p></div>';
+    } else {
+        h += `<div class="flex justify-between items-center mt-3 pt-3 border-t border-slate-200">
+                <span class="font-bold text-[12px] text-slate-500 uppercase tracking-widest">Suma en Productos</span>
+                <span class="font-black text-[15px] text-slate-800">$${subtotalPuro.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+              </div>`;
+    }
     container.innerHTML = h;
 }
 
 function updateOrdenesUI() {
-    document.getElementById('o-count').textContent = `${ordersHistory.length}/${ordersHistory.length}`;
+    const headerCount = document.getElementById('o-count-header');
+    if(headerCount) headerCount.textContent = ordersHistory.length;
+    
+    const syncAlertBox = document.getElementById('sync-alert-box');
+    const headerDot = document.getElementById('o-header-dot');
+    if(syncAlertBox && headerDot) {
+        if(unsyncedOrdersCount > 0) {
+            syncAlertBox.className = "bg-pink-50 border border-pink-100 rounded-xl py-3 text-center mb-4 transition-all";
+            syncAlertBox.innerHTML = `<span class="text-sm font-semibold text-primary">Tienes ${unsyncedOrdersCount} orden${unsyncedOrdersCount!==1?'es':''} sin sincronizar</span>`;
+            headerDot.className = "w-2 h-2 bg-primary rounded-full animate-pulse";
+        } else {
+            syncAlertBox.className = "bg-emerald-50 border border-emerald-100 rounded-xl py-3 text-center mb-4 transition-all";
+            syncAlertBox.innerHTML = `<span class="text-sm font-semibold text-emerald-600 flex items-center justify-center gap-1.5"><span class="ms" style="font-size:18px; font-variation-settings:'FILL' 1;">cloud_done</span> Órdenes sincronizadas</span>`;
+            headerDot.className = "w-2 h-2 bg-emerald-500 rounded-full";
+        }
+    }
+
     const container = document.getElementById('o-list');
+    if(!container) return;
 
     if(ordersHistory.length === 0) {
-        container.innerHTML = '<p class="text-center text-sm font-medium text-slate-400 py-10">No hay órdenes recientes</p>';
+        container.innerHTML = '<div class="text-center py-10"><p class="text-slate-400 font-medium">No hay órdenes recientes</p></div>';
         return;
     }
 
-    container.innerHTML = ordersHistory.map(o => `
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-            <div class="flex justify-between items-center mb-3">
-                <span class="font-black text-slate-800 text-[15px]">${o.id}</span>
-                <span class="bg-primary text-white font-bold text-sm px-3 py-1 rounded-full shadow-sm">$${o.total.toFixed(2)}</span>
-            </div>
-            <div class="flex justify-between items-center mb-3">
+    container.innerHTML = ordersHistory.map((o, index) => {
+        const dotColors = ['bg-red-500', 'bg-amber-400', 'bg-blue-500', 'bg-purple-500'];
+        const dotColor = dotColors[index % dotColors.length];
+        const timeOnly = o.datetime.split('. ')[1] || '00:00';
+        const subtotal = o.subtotal;
+
+        return `
+        <div class="bg-white rounded-[20px] p-5 border border-slate-100 shadow-sm relative overflow-hidden cursor-pointer active:scale-[0.98] transition-all hover:bg-slate-50" onclick="verDetalleOrden('${o.id}')">
+            <div class="flex justify-between items-center mb-4">
                 <div class="flex items-center gap-2">
-                    <div class="w-7 h-7 rounded-full bg-primary/10 text-primary font-black text-xs flex items-center justify-center">${o.qty}</div>
-                    <span class="text-[13px] text-slate-600 font-medium">Pieza${o.qty>1?'s':''}</span>
+                    <div class="w-2.5 h-2.5 rounded-full ${dotColor}"></div>
+                    <span class="font-black text-slate-900 text-[18px] tracking-tight">${o.id}</span>
+                    <span class="text-slate-400 text-[13px] font-medium ml-1">${timeOnly}</span>
                 </div>
-                <span class="text-[13px] text-slate-500 font-medium">Propina: <span class="text-primary font-bold">$${o.tip.toFixed(2)}</span></span>
+                <div class="bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                    <span class="ms" style="font-size: 14px; font-variation-settings: 'FILL' 1;">check_circle</span>
+                    <span class="text-[10px] font-bold tracking-wider">PAGADA</span>
+                </div>
             </div>
-            <div class="flex justify-between items-center pt-3 border-t border-slate-100">
-                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Barra Lateral</span>
-                <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">${o.datetime} <span class="ms text-green-500" style="font-size:16px">done_all</span></span>
+
+            <div class="mb-4">
+                <span class="bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">BARRA LATERAL</span>
+            </div>
+
+            <p class="font-bold text-slate-800 text-[15px] mb-3">${o.qty} item${o.qty !== 1 ? 's' : ''}</p>
+
+            <div class="flex justify-between items-center text-[13px] text-slate-500 mb-1.5">
+                <span>Subtotal</span>
+                <span>$${subtotal.toFixed(2)}</span>
+            </div>
+            <div class="flex justify-between items-center text-[13px] text-slate-500 mb-4">
+                <span>Propina</span>
+                <span>$${o.tip.toFixed(2)}</span>
+            </div>
+
+            <div class="border-t border-slate-100 my-3"></div>
+
+            <div class="flex justify-end flex-col items-end">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">TOTAL COBRADO</span>
+                <span class="text-[22px] font-black text-slate-900 leading-none">$${o.total.toFixed(2)}</span>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // ══════════════════════════════════════
-// ÉXITO (RECIBO DINÁMICO)
+// DETALLE DE ORDEN
+// ══════════════════════════════════════
+function verDetalleOrden(orderId) {
+    const orden = ordersHistory.find(o => o.id === orderId);
+    if(!orden) return;
+
+    let itemsHtml = '';
+    for (let itemId in orden.items) {
+        let q = orden.items[itemId];
+        let product = PRODS.find(p => p.id === itemId);
+        if (product) {
+            itemsHtml += `
+            <div class="flex justify-between items-start mb-4">
+                <div class="flex gap-3">
+                    <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 font-bold text-[12px] flex items-center justify-center flex-shrink-0 mt-0.5">${q}</div>
+                    <div>
+                        <p class="font-bold text-[14px] text-slate-800 leading-tight">${product.name}</p>
+                        <p class="text-[12px] text-slate-400 mt-1">Sin modificadores</p>
+                    </div>
+                </div>
+                <span class="font-bold text-[14px] text-slate-900">$${(product.price * q).toFixed(2)}</span>
+            </div>
+            `;
+        }
+    }
+
+    // MULTIPLES METODOS DE PAGO HTML
+    let pagosHtml = '';
+    orden.pagos.forEach(pago => {
+        let methodIcon = pago.metodo === 'tarjeta' ? 'credit_card' : 'qr_code_2';
+        let methodName = pago.metodo === 'tarjeta' ? 'Tarjeta' : 'QR / Digital';
+        let methodDesc = pago.metodo === 'tarjeta' ? '**** 4242' : 'App'; 
+
+        pagosHtml += `
+        <div class="bg-slate-50 rounded-xl p-4 flex justify-between items-center mb-2">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
+                    <span class="ms text-slate-600" style="font-size:18px">${methodIcon}</span>
+                </div>
+                <div>
+                    <p class="font-bold text-[13px] text-slate-800 leading-tight">${methodName}</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">${methodDesc}</p>
+                </div>
+            </div>
+            <span class="font-bold text-[13px] text-slate-800">$${pago.amount.toFixed(2)}</span>
+        </div>
+        `;
+    });
+
+    let propinaPct = orden.subtotal > 0 ? Math.round((orden.tip / orden.subtotal) * 100) : 0;
+    let propinaText = propinaPct > 0 ? `Propina (${propinaPct}%)` : `Propina`;
+
+    const contentHtml = `
+    <div class="bg-white rounded-[20px] p-5 shadow-sm border border-slate-100 relative">
+        <div class="flex justify-between items-start mb-2">
+            <div>
+                <p class="text-[12px] font-medium text-slate-500 mb-1 capitalize">${orden.datetimeLong}</p>
+                <p class="text-[32px] font-black text-slate-900 leading-none mb-1">${orden.id}</p>
+                <p class="text-[14px] font-medium text-slate-600">Barra Lateral</p>
+            </div>
+            <div class="bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                <span class="ms" style="font-size: 14px; font-variation-settings: 'FILL' 1;">check_circle</span>
+                <span class="text-[10px] font-bold tracking-wider">PAGADA</span>
+            </div>
+        </div>
+
+        <div class="border-t border-dashed border-slate-200 my-5"></div>
+
+        <div class="mb-2">
+            ${itemsHtml}
+        </div>
+
+        <div class="border-t border-dashed border-slate-200 my-5"></div>
+
+        <div class="flex justify-between items-center text-[14px] text-slate-500 mb-2">
+            <span>Subtotal</span>
+            <span>$${orden.subtotal.toFixed(2)}</span>
+        </div>
+        <div class="flex justify-between items-center text-[14px] text-slate-500 mb-4">
+            <span>${propinaText}</span>
+            <span>$${orden.tip.toFixed(2)}</span>
+        </div>
+
+        <div class="flex justify-between items-center mb-6">
+            <span class="font-bold text-[16px] text-slate-800">Total Pagado</span>
+            <span class="text-[28px] font-black text-slate-900 leading-none">$${orden.total.toFixed(2)}</span>
+        </div>
+
+        ${pagosHtml}
+
+        <div class="border-t border-dashed border-slate-200 my-5"></div>
+
+        <div class="flex gap-4">
+            <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                <span class="text-[12px] font-medium text-slate-600">Venta sincronizada</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                <span class="text-[12px] font-medium text-slate-600">Pago sincronizado</span>
+            </div>
+        </div>
+    </div>
+    `;
+
+    document.getElementById('detalle-orden-content').innerHTML = contentHtml;
+    goTo('s-detalle-orden');
+}
+
+
+// ══════════════════════════════════════
+// ÉXITO (RECIBO DINÁMICO Y OPCIONES SPLIT)
 // ══════════════════════════════════════
 function mostrarExito(){
-  const total = getTotal(), n = getTI();
+  let total = isSplitPayment ? splitCurrentPayment : getTotal();
+  let n = getTI();
   const now = new Date();
-  
-  // Generar Autorización aleatoria
   const authCode = Math.floor(100000 + Math.random() * 900000); 
 
-  document.getElementById('exito-tx-num').textContent = `Orden #${currentOrderId}`;
-  document.getElementById('exito-total').textContent = '$' + total.toFixed(2);
-  document.getElementById('exito-fecha').textContent = now.toLocaleDateString('es-MX');
-  document.getElementById('exito-hora').textContent = now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+  const exitoTxNum = document.getElementById('exito-tx-num');
+  if(exitoTxNum) exitoTxNum.textContent = `Orden #${currentOrderId}`;
+  const exitoTotal = document.getElementById('exito-total');
+  if(exitoTotal) exitoTotal.textContent = '$' + total.toFixed(2);
+  const exitoFecha = document.getElementById('exito-fecha');
+  if(exitoFecha) exitoFecha.textContent = now.toLocaleDateString('es-MX');
+  const exitoHora = document.getElementById('exito-hora');
+  if(exitoHora) exitoHora.textContent = now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
   
-  document.getElementById('exito-tags').innerHTML=
-    `<span class="bg-slate-100 rounded-full px-3 py-1 text-sm font-bold flex items-center gap-1 text-slate-600">🛍 ${n} artículo${n!==1?'s':''}</span>`;
+  const exitoTags = document.getElementById('exito-tags');
+  if(exitoTags) {
+      exitoTags.innerHTML=
+        `<span class="bg-slate-100 rounded-full px-3 py-1 text-sm font-bold flex items-center gap-1 text-slate-600">🛍 ${n} artículo${n!==1?'s':''}</span>`;
+  }
   
   const sub = getSub();
-  document.getElementById('exito-items').innerHTML = Object.entries(carrito).map(([id,qty])=>{
-    const p = PRODS.find(x=>x.id===id);
-    return `<div class="flex justify-between text-sm">
-      <div class="flex gap-2"><span class="bg-slate-100 text-slate-500 text-xs font-bold rounded px-1.5 py-0.5 h-fit mt-0.5">${qty}x</span><span class="text-slate-600 font-medium">${p.name}</span></div>
-      <span class="font-bold">$${(p.price*qty).toFixed(2)}</span>
-    </div>`;
-  }).join('');
+  const exitoItems = document.getElementById('exito-items');
+  if(exitoItems) {
+      exitoItems.innerHTML = Object.entries(carrito).map(([id,qty])=>{
+        const p = PRODS.find(x=>x.id===id);
+        return `<div class="flex justify-between text-sm">
+          <div class="flex gap-2"><span class="bg-slate-100 text-slate-500 text-xs font-bold rounded px-1.5 py-0.5 h-fit mt-0.5">${qty}x</span><span class="text-slate-600 font-medium">${p.name}</span></div>
+          <span class="font-bold">$${(p.price*qty).toFixed(2)}</span>
+        </div>`;
+      }).join('');
+  }
   
   const prop = getPropAmt();
   const baseSubtotal = sub / 1.16;
@@ -1220,15 +1820,17 @@ function mostrarExito(){
 
   let totH = '';
   
-  // Desglose: Subtotal, IVA, Propina (Si hay) y Total
-  totH += `<div class="flex justify-between text-[15px] text-slate-500 font-medium mb-1.5"><span>Subtotal</span><span>$${baseSubtotal.toFixed(2)}</span></div>`;
-  totH += `<div class="flex justify-between text-[15px] text-slate-500 font-medium mb-3"><span>IVA (16%)</span><span>$${iva.toFixed(2)}</span></div>`;
-  if (prop > 0) {
-      totH += `<div class="flex justify-between text-[15px] text-slate-500 font-medium mb-3"><span>Propina</span><span>$${prop.toFixed(2)}</span></div>`;
+  if (isSplitPayment) {
+      totH += `<div class="flex justify-between text-[15px] text-slate-500 font-medium mb-1.5"><span>Monto Parcial Pagado</span><span>$${total.toFixed(2)}</span></div>`;
+  } else {
+      totH += `<div class="flex justify-between text-[15px] text-slate-500 font-medium mb-1.5"><span>Subtotal</span><span>$${baseSubtotal.toFixed(2)}</span></div>`;
+      totH += `<div class="flex justify-between text-[15px] text-slate-500 font-medium mb-3"><span>IVA (16%)</span><span>$${iva.toFixed(2)}</span></div>`;
+      if (prop > 0) {
+          totH += `<div class="flex justify-between text-[15px] text-slate-500 font-medium mb-3"><span>Propina</span><span>$${prop.toFixed(2)}</span></div>`;
+      }
   }
-  totH += `<div class="flex justify-between font-black text-[18px] text-slate-900 pt-4 border-t border-dashed border-slate-200 mb-5"><span>Total</span><span>$${total.toFixed(2)}</span></div>`;
+  totH += `<div class="flex justify-between font-black text-[18px] text-slate-900 pt-4 border-t border-dashed border-slate-200 mb-5"><span>Total Transacción</span><span class="text-primary">$${total.toFixed(2)}</span></div>`;
 
-  // UI Condicional según Método de Pago
   if (metodoPago === 'tarjeta') {
       totH += `
       <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-center gap-4">
@@ -1255,16 +1857,56 @@ function mostrarExito(){
       </div>`;
   }
   
-  document.getElementById('exito-totals-box').innerHTML = totH;
+  const exitoTotalsBox = document.getElementById('exito-totals-box');
+  if(exitoTotalsBox) exitoTotalsBox.innerHTML = totH;
+  
+  let isFullyPaid = true;
+  if(isSplitPayment) {
+      if(splitTotalOriginal - splitPaidAmount > 0.01) isFullyPaid = false;
+  }
+
+  const bottomBar = document.getElementById('exito-bottom-bar');
+  if(bottomBar) {
+      if(!isFullyPaid) {
+          bottomBar.innerHTML = `
+              <button onclick="showToast('🖨️ Imprimiendo ticket...')" class="w-full bg-transparent border border-primary text-primary font-bold py-4 rounded-2xl flex items-center justify-center gap-2 mb-3 active:bg-primary/5 transition-all">
+                <span class="ms" style="font-variation-settings:'FILL' 1;">print</span> Imprimir Recibo
+              </button>
+              <button onclick="continuarSplit()" class="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95 transition-all">
+                Pagar saldo restante
+              </button>
+          `;
+      } else {
+          bottomBar.innerHTML = `
+              <button onclick="showToast('🖨️ Imprimiendo ticket...')" class="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 mb-3 active:scale-95 transition-all">
+                <span class="ms" style="font-variation-settings:'FILL' 1;">print</span> Imprimir Recibo
+              </button>
+              <button onclick="nuevaVenta()" class="w-full font-bold py-3 text-slate-700 active:opacity-70">
+                Nueva Venta
+              </button>
+          `;
+      }
+  }
+  
   goTo('s-exito');
 }
 
 function nuevaVenta(){
   carrito={}; propPct=null; customAmt=0; customStr='';
   nota=''; currentOrderId=''; metodoPago='tarjeta';
-  document.getElementById('nota-label').textContent='Agregar comentario al pedido...';
-  document.getElementById('nota-ta').value='';
-  document.getElementById('nota-cnt').textContent='0/150';
+  
+  isSplitPayment = false;
+  splitTotalOriginal = 0;
+  splitPaidAmount = 0;
+  splitCurrentPayment = 0;
+  itemsRegisteredForThisOrder = false;
+
+  const notaLbl = document.getElementById('nota-label');
+  if(notaLbl) notaLbl.textContent='Agregar comentario al pedido...';
+  const notaTa = document.getElementById('nota-ta');
+  if(notaTa) notaTa.value='';
+  const notaCnt = document.getElementById('nota-cnt');
+  if(notaCnt) notaCnt.textContent='0/150';
   renderProds(); updBot();
   goTo('s-catalogo');
 }
@@ -1273,13 +1915,24 @@ function nuevaVenta(){
 // HERRAMIENTAS ADICIONALES
 // ══════════════════════════════════════
 function openSheet(id){
-  if(id==='sh-nota'){ document.getElementById('nota-ta').value=nota; document.getElementById('nota-cnt').textContent=nota.length+'/150'; }
-  document.getElementById(id).classList.remove('hidden');
+  if(id==='sh-nota'){ 
+      const notaTa = document.getElementById('nota-ta');
+      if(notaTa) notaTa.value=nota; 
+      const notaCnt = document.getElementById('nota-cnt');
+      if(notaCnt) notaCnt.textContent=nota.length+'/150'; 
+  }
+  const el = document.getElementById(id);
+  if(el) el.classList.remove('hidden');
 }
-function closeSheet(id){ document.getElementById(id).classList.add('hidden'); }
+
+function closeSheet(id){ 
+  const el = document.getElementById(id);
+  if(el) el.classList.add('hidden'); 
+}
 
 function guardarNota(){
-  nota=document.getElementById('nota-ta').value.trim();
+  const notaTa = document.getElementById('nota-ta');
+  if(notaTa) nota = notaTa.value.trim();
   closeSheet('sh-nota');
   if(current==='s-pedido') renderPedido();
   showToast(nota?'📝 Nota guardada':'📝 Nota eliminada');
@@ -1293,6 +1946,7 @@ function vaciarPedido(){
 
 function showToast(msg){
   const t=document.getElementById('toast');
+  if(!t) return;
   t.textContent=msg; t.style.opacity='1';
   setTimeout(()=>t.style.opacity='0',2000);
 }
